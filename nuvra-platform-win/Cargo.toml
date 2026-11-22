@@ -1,0 +1,18 @@
+[package]
+name = "nuvra-platform-win"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+# SAFETY: This is the ONLY crate permitted to use unsafe.
+# All unsafe blocks carry a // SAFETY: comment.
+
+[dependencies]
+windows.workspace   = true
+tracing.workspace   = true
+thiserror.workspace = true
+parking_lot.workspace = true
+aes-gcm.workspace   = true
+zeroize.workspace   = true
