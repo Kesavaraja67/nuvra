@@ -3,5 +3,7 @@
 // R-13: No unsafe in this crate (platform calls go through nuvra-platform-win).
 #![forbid(unsafe_code)]
 
+pub mod engine;
 pub mod spike;
+pub mod spring;
 pub mod tokens;
