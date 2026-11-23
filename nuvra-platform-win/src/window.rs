@@ -7,8 +7,13 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 use std::sync::Arc;
 use windows::core::w;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Graphics::Dwm::{
+    DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_SYSTEMBACKDROP_TYPE,
+    DWMWINDOWATTRIBUTE,
+};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Controls::MARGINS;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -99,6 +104,9 @@ impl NotchWindow {
             // Store shared state pointer in GWLP_USERDATA
             let ptr = Arc::into_raw(Arc::clone(&shared)) as isize;
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr);
+
+            // Enable real physical DWM Acrylic backdrop blur behind window
+            enable_acrylic_blur(hwnd);
 
             // Fetch initial DPI
             let dpi = GetDpiForWindow(hwnd);
@@ -299,4 +307,78 @@ unsafe extern "system" fn notch_wnd_proc(
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct AccentPolicy {
+    accent_state: u32,
+    accent_flags: u32,
+    gradient_color: u32,
+    animation_id: u32,
+}
+
+#[repr(C)]
+struct WindowCompositionAttribData {
+    attrib: u32,
+    pv_data: *mut std::ffi::c_void,
+    cb_data: usize,
+}
+
+type SetWindowCompositionAttributeFn =
+    unsafe extern "system" fn(HWND, *mut WindowCompositionAttribData) -> i32;
+
+// SAFETY: Calls DWM and user32 APIs to activate hardware blur on underlying desktop wallpaper.
+unsafe fn enable_acrylic_blur(hwnd: HWND) {
+    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+
+    // 1. Windows 10/11 SetWindowCompositionAttribute (ACCENT_ENABLE_ACRYLICBLURBEHIND = 4)
+    if let Ok(user32) = LoadLibraryW(w!("user32.dll")) {
+        let proc = GetProcAddress(user32, windows::core::s!("SetWindowCompositionAttribute"));
+        if let Some(func) = proc {
+            let set_window_comp: SetWindowCompositionAttributeFn = std::mem::transmute(func);
+
+            let mut accent = AccentPolicy {
+                accent_state: 4, // ACCENT_ENABLE_ACRYLICBLURBEHIND
+                accent_flags: 2,
+                gradient_color: 0x01101826, // Subtle translucent dark indigo tint
+                animation_id: 0,
+            };
+
+            let mut data = WindowCompositionAttribData {
+                attrib: 19, // WCA_ACCENT_POLICY
+                pv_data: &mut accent as *mut _ as *mut std::ffi::c_void,
+                cb_data: std::mem::size_of::<AccentPolicy>(),
+            };
+
+            let _ = set_window_comp(hwnd, &mut data);
+        }
+    }
+
+    // 2. Windows 11 22H2+ System Backdrop Type (DWMSBT_TRANSIENTWINDOW = 3 Acrylic)
+    let backdrop_type: u32 = 3;
+    let _ = DwmSetWindowAttribute(
+        hwnd,
+        DWMWA_SYSTEMBACKDROP_TYPE,
+        &backdrop_type as *const _ as *const _,
+        std::mem::size_of::<u32>() as u32,
+    );
+
+    // 3. Extend Frame into client area so glass encompasses entire surface
+    let margins = MARGINS {
+        cxLeftWidth: -1,
+        cxRightWidth: -1,
+        cyTopHeight: -1,
+        cyBottomHeight: -1,
+    };
+    let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+
+    // 4. Windows 11 rounded window corners (DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2)
+    let corner_preference: u32 = 2; // DWMWCP_ROUND
+    let _ = DwmSetWindowAttribute(
+        hwnd,
+        DWMWINDOWATTRIBUTE(33),
+        &corner_preference as *const _ as *const _,
+        std::mem::size_of::<u32>() as u32,
+    );
 }
