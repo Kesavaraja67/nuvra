@@ -844,6 +844,7 @@ name = "nuvra-platform-win"
 version = "0.0.1-dev"
 dependencies = [
  "aes-gcm",
+ "flume",
  "parking_lot",
  "thiserror 1.0.69",
  "tracing",

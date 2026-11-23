@@ -15,9 +15,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessagePos, PeekMessageW,
     PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_USERDATA,
     HTCLIENT, HTTRANSPARENT, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOWNA, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST,
-    WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+    WM_NCHITTEST, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
 
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -28,6 +28,7 @@ pub enum WindowEvent {
     MouseEnter,
     MouseLeave,
     Click { x: i32, y: i32 },
+    HotKey { id: i32 },
     DpiChanged { new_dpi: u32 },
     DisplayChanged,
 }
@@ -250,6 +251,11 @@ unsafe extern "system" fn notch_wnd_proc(
             let x = (lparam.0 & 0xFFFF) as i16 as i32;
             let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
             let _ = shared.event_tx.try_send(WindowEvent::Click { x, y });
+            LRESULT(0)
+        }
+        WM_HOTKEY => {
+            let id = wparam.0 as i32;
+            let _ = shared.event_tx.try_send(WindowEvent::HotKey { id });
             LRESULT(0)
         }
         WM_DPICHANGED => {
