@@ -56,6 +56,24 @@ jobs:
       - name: Dependency policy
         run: cargo deny check
 
+  msrv:
+    name: Check MSRV (1.88)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88"
+
+      - name: Verify MSRV builds
+        shell: pwsh
+        run: |
+          $env:RUSTUP_TOOLCHAIN = "1.88"
+          cargo check --workspace
+
   coverage:
     name: Coverage
     runs-on: windows-latest

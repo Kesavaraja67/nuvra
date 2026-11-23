@@ -10,6 +10,7 @@ use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
 };
+use zeroize::Zeroize;
 
 /// Seal `plaintext` using DPAPI (current user scope).
 /// Returns the encrypted blob. Caller-scoped; no key material lingers in this crate.
@@ -106,10 +107,11 @@ pub fn unseal_key(ciphertext: &[u8]) -> Result<Vec<u8>, SealError> {
     let plaintext =
         unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize).to_vec() };
 
-    // SAFETY: Zeroize decrypted memory buffer before freeing to protect plaintext key.
+    // SAFETY: Zeroize decrypted memory buffer using Zeroize trait before freeing to protect plaintext key.
     // LocalFree on DPAPI-allocated pointer.
     unsafe {
-        std::ptr::write_bytes(data_out.pbData, 0, data_out.cbData as usize);
+        let slice = std::slice::from_raw_parts_mut(data_out.pbData, data_out.cbData as usize);
+        slice.zeroize();
         let _ = LocalFree(HLOCAL(data_out.pbData as *mut _));
     }
 
@@ -135,3 +137,23 @@ impl std::fmt::Display for SealError {
 }
 
 impl std::error::Error for SealError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dpapi_roundtrip() {
+        let input = b"nuvra-dpapi-test-payload-32bytes";
+        let sealed = seal_key(input).expect("seal_key failed");
+        assert_ne!(sealed, input);
+        let unsealed = unseal_key(&sealed).expect("unseal_key failed");
+        assert_eq!(unsealed, input);
+    }
+
+    #[test]
+    fn test_dpapi_empty() {
+        assert!(matches!(seal_key(b""), Err(SealError::EmptyInput)));
+        assert!(matches!(unseal_key(b""), Err(SealError::EmptyInput)));
+    }
+}

@@ -22,9 +22,9 @@ Does the locked color token `--text-tertiary: #5E6470` on Obsidian surface `#060
 
 ## 3. Options
 
-### Option 1 (Recommended): Restrict `--text-tertiary` to Non-Body Elements
-- **Description:** Formally specify in the design system that `--text-tertiary` is reserved strictly for non-body elements: timestamps, breadcrumbs, placeholder text, and subtle metadata where 3.0:1 is the WCAG AA standard. All body copy must use `--text-primary` (16.2:1) or `--text-secondary` (7.4:1).
-- **Trade-offs:** Preserves the locked `#5E6470` palette token while remaining strictly WCAG 2.1 AA compliant.
+### Option 1 (Recommended): Restrict `--text-tertiary` to Non-Text & Incidental Indicators
+- **Description:** Formally specify in the design system that `--text-tertiary` is reserved strictly for non-text UI components, borders, subtle divider lines, and disabled/incidental indicators where 3.0:1 is the WCAG AA requirement (or exempt). All text copy—including normal-size input placeholder text—must use `--text-primary` (16.2:1) or `--text-secondary` (`#9AA0AC`, 7.4:1) to satisfy the 4.5:1 body text requirement.
+- **Trade-offs:** Preserves the locked `#5E6470` palette token while ensuring every text element meets WCAG 2.1 AA (4.5:1 for body and placeholders, 3:1 for large text and UI components).
 
 ### Option 2: Lighten `--text-tertiary` in Obsidian to 4.5:1
 - **Description:** Adjust Obsidian `--text-tertiary` from `#5E6470` to `#757B88` (which provides 4.6:1 contrast against `#060709`).

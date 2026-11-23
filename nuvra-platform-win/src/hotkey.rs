@@ -79,3 +79,21 @@ impl std::fmt::Display for HotKeyError {
 }
 
 impl std::error::Error for HotKeyError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, VK_N};
+
+    #[test]
+    fn test_hotkey_invalid_id() {
+        assert!(matches!(
+            HotKeyRegistration::register(HWND(std::ptr::null_mut()), 0, MOD_ALT, VK_N),
+            Err(HotKeyError::InvalidId(0))
+        ));
+        assert!(matches!(
+            HotKeyRegistration::register(HWND(std::ptr::null_mut()), 0xC000, MOD_ALT, VK_N),
+            Err(HotKeyError::InvalidId(0xC000))
+        ));
+    }
+}

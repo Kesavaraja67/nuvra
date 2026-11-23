@@ -8,15 +8,15 @@
 
 ## 1. The Question
 
-How should Section 15.6 (*"In v1.5 before the license server exists: stub entitlement check that returns true"*) be reconciled with Rule **R-12** (*"No stubs. No todo!(), unimplemented!(), placeholder logic, fake data, commented-out code or dead code in delivered work"* ) prior to v1.5 implementation?
+How should Section 15.6 (*"entitlement stubbed via the license interface until v3 licensing"*) be reconciled with Rule **R-12** (*"No stubs. No todo!(), unimplemented!(), placeholder logic, fake data, commented-out code or dead code in delivered work"* ) prior to v1.5 and v3 implementation?
 
 ---
 
 ## 2. Why It Is Unresolved
 
-- **Rule R-12** strictly forbids any stubs or fake logic in delivered work.
-- **Section 15.6** specifies an offline entitlement check stub that unconditionally returns `true` during v1.5 before the v2 license server is deployed.
-- While this applies to v1.5 (not Phase 0 or v1), CodeRabbit review flagged the discrepancy in the master specification so it can be resolved before v1.5 begins.
+- **Rule R-12** strictly forbids any stubs or placeholder logic in delivered work across all versions.
+- **Section 15.6** states: *"Pro themes (Graphite Sand, Ink Blue) included but entitlement-gated (entitlement stubbed via the license interface until v3 licensing)"*.
+- **Section 17.7 (v3)** states: *"entitlement gating per D-BIZ-02/03/04 replaces the v1.5 stub"*, meaning the stub would persist across v1.5 and v2. The runtime behavior and interface contract of this stub remain undefined and conflict directly with R-12.
 
 ---
 

@@ -56,23 +56,6 @@
   --warning:         #FFD400;
 }
 
-@media (forced-colors: active) {
-  :root {
-    --surface:         #000000;
-    --surface-raised:  #0A0A0A;
-    --surface-high:    #141414;
-    --edge:            #FFFFFF;
-    --edge-lit:        rgba(255, 255, 255, 1.00);
-    --text-primary:    #FFFFFF;
-    --text-secondary:  #E0E0E0;
-    --text-tertiary:   #BDBDBD;
-    --accent:          #FFD400;
-    --danger:          #FF6B6B;
-    --ok:              #7CFF9E;
-    --warning:         #FFD400;
-  }
-}
-
 /* ── Pro themes (entitlement-gated — applied via data-theme attribute) ──────── */
 [data-theme="graphite-sand"] {
   --surface:         #121316;
@@ -102,6 +85,26 @@
   --danger:          #FF4258;
   --ok:              #46D39A;
   --warning:         #FFC247;
+}
+
+/* ── Windows High Contrast Mode / Forced Colors Override ─────────────────── */
+/* Placed after all theme definitions to override explicit theme attributes */
+@media (forced-colors: active) {
+  :root,
+  [data-theme] {
+    --surface:         #000000;
+    --surface-raised:  #0A0A0A;
+    --surface-high:    #141414;
+    --edge:            #FFFFFF;
+    --edge-lit:        rgba(255, 255, 255, 1.00);
+    --text-primary:    #FFFFFF;
+    --text-secondary:  #E0E0E0;
+    --text-tertiary:   #BDBDBD;
+    --accent:          #FFD400;
+    --danger:          #FF6B6B;
+    --ok:              #7CFF9E;
+    --warning:         #FFD400;
+  }
 }
 
 /* ── Spacing grid (4 px base unit) ─────────────────────────────────────────── */
