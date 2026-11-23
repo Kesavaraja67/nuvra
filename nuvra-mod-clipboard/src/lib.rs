@@ -1,8 +1,8 @@
-// nuvra-mod-clipboard — clipboard history module.
+// nuvra-mod-clipboard — clipboard history and exclusions
 // R-13: No unsafe.
-// D-DAT-01/02/03: AES-256-GCM storage, limits, exclusions.
 #![forbid(unsafe_code)]
 
 pub mod exclusions;
+pub mod history;
 pub mod module;
 pub mod state;
