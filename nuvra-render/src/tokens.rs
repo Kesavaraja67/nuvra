@@ -84,14 +84,15 @@ pub mod window {
     pub const IDLE_WIDTH: f32 = 160.0;
     pub const IDLE_HEIGHT: f32 = 2.0;
 
-    pub const AMBIENT_WIDTH: f32 = 220.0;
+    pub const AMBIENT_WIDTH: f32 = 290.0;
     pub const AMBIENT_HEIGHT: f32 = 34.0;
 
-    pub const GLANCE_WIDTH: f32 = 360.0;
+    pub const GLANCE_WIDTH: f32 = 380.0;
     pub const GLANCE_HEIGHT: f32 = 64.0;
 
-    pub const EXPANDED_WIDTH: f32 = 520.0;
-    pub const EXPANDED_DEFAULT_HEIGHT: f32 = 220.0;
+    pub const EXPANDED_WIDTH: f32 = 720.0;
+    pub const EXPANDED_DEFAULT_HEIGHT: f32 = 54.0;
+    pub const EXPANDED_DRAWER_HEIGHT: f32 = 180.0;
     pub const EXPANDED_MAX_HEIGHT: f32 = 360.0;
 }
 

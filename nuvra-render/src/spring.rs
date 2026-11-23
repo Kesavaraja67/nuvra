@@ -141,6 +141,25 @@ impl NotchGeometryAnimator {
         self.radius.set_target(target_r);
     }
 
+    /// Set a custom target height for active tool drawers (e.g. Shelf, Clipboard)
+    pub fn set_target_height(&mut self, target_h: f32) {
+        let params = if target_h > self.height.current {
+            SpringParams {
+                stiffness: tokens::spring::EXPAND.stiffness,
+                damping: tokens::spring::EXPAND.damping,
+                mass: tokens::spring::EXPAND.mass,
+            }
+        } else {
+            SpringParams {
+                stiffness: tokens::spring::COLLAPSE.stiffness,
+                damping: tokens::spring::COLLAPSE.damping,
+                mass: tokens::spring::COLLAPSE.mass,
+            }
+        };
+        self.height.params = params;
+        self.height.set_target(target_h);
+    }
+
     pub fn step(&mut self, dt: f32) {
         self.width.step(dt);
         self.height.step(dt);

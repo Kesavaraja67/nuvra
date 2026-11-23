@@ -97,6 +97,7 @@ pub struct NotchEngine {
     is_hovered: bool,
     is_pinned: bool,
     is_expanded: bool,
+    active_drawer: Option<usize>,
 }
 
 impl NotchEngine {
@@ -107,6 +108,7 @@ impl NotchEngine {
             is_hovered: false,
             is_pinned: true, // Default to pinned ambient so notch is visible on launch (D-WIN-07)
             is_expanded: false,
+            active_drawer: None,
         }
     }
 
@@ -128,14 +130,37 @@ impl NotchEngine {
 
     pub fn toggle_expand(&mut self) {
         self.is_expanded = !self.is_expanded;
+        if !self.is_expanded {
+            self.active_drawer = None;
+        }
     }
 
     pub fn set_expanded(&mut self, expanded: bool) {
         self.is_expanded = expanded;
+        if !expanded {
+            self.active_drawer = None;
+        }
     }
 
     pub fn is_expanded(&self) -> bool {
         self.is_expanded
+    }
+
+    pub fn active_drawer(&self) -> Option<usize> {
+        self.active_drawer
+    }
+
+    pub fn set_active_drawer(&mut self, drawer: Option<usize>) {
+        self.active_drawer = drawer;
+    }
+
+    pub fn toggle_drawer(&mut self, drawer: usize) {
+        if self.active_drawer == Some(drawer) {
+            self.active_drawer = None;
+        } else {
+            self.active_drawer = Some(drawer);
+            self.is_expanded = true;
+        }
     }
 
     /// Advance the simulation and compute the current visual frame.
@@ -143,6 +168,13 @@ impl NotchEngine {
         // Resolve target state based on priority & user interactions
         if self.is_expanded {
             self.animator.set_state(NotchState::Expanded);
+            if self.active_drawer.is_some() {
+                self.animator
+                    .set_target_height(tokens::window::EXPANDED_DRAWER_HEIGHT);
+            } else {
+                self.animator
+                    .set_target_height(tokens::window::EXPANDED_DEFAULT_HEIGHT);
+            }
         } else if self.is_hovered {
             self.animator.set_state(NotchState::Glance);
         } else if self.is_pinned {

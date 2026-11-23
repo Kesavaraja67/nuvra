@@ -82,6 +82,9 @@ fn main() {
     let _hk_mute = HotKeyRegistration::register(window.hwnd(), 1, MOD_CONTROL | MOD_ALT, VK_M).ok();
     let _hk_expand =
         HotKeyRegistration::register(window.hwnd(), 2, MOD_CONTROL | MOD_ALT, VK_N).ok();
+    let vk_g = windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(0x47);
+    let _hk_glass =
+        HotKeyRegistration::register(window.hwnd(), 3, MOD_CONTROL | MOD_ALT, vk_g).ok();
 
     // 7. Initialize System Tray Icon
     let _tray = TrayIcon::new(window.hwnd()).ok();
@@ -94,8 +97,13 @@ fn main() {
 
     println!("Nuvra v1 Notch engine active.");
     println!("  -> Docked at top-center of primary monitor.");
-    println!("  -> Move cursor to top edge (or press Ctrl+Alt+N) to expand.");
+    println!("  -> Move cursor to top edge (or press Ctrl+Alt+N) to expand workspace.");
+    println!(
+        "  -> Press Ctrl+Alt+G (or click 💎 on notch) to toggle Frosted Glass vs Solid Opaque."
+    );
     println!("  -> Press Ctrl+Alt+M to toggle global microphone mute.");
+    println!("  -> Right-click or left-click and drag horizontally to reposition.");
+    println!("  -> Double-click to snap back to monitor center.");
     println!("  -> Right-click Nuvra icon in system tray to quit.");
 
     // One-shot test exit mode for headless test runs
@@ -119,9 +127,38 @@ fn main() {
                     engine.set_hovered(false);
                 }
                 WindowEvent::Click { x, y } => {
-                    // In expanded view, clicks on top navigation bar switch tabs
-                    if engine.is_expanded() && renderer.handle_click(x as f32, y as f32) {
-                        // Handled by top icon bar!
+                    if engine.is_expanded() {
+                        if let Some(action) = renderer.handle_click(x as f32, y as f32) {
+                            match action {
+                                nuvra_platform_win::renderer::RendererAction::ToggleDrawer(d) => {
+                                    engine.toggle_drawer(d);
+                                }
+                                nuvra_platform_win::renderer::RendererAction::TogglePlayPause => {
+                                    // Media play/pause action
+                                }
+                                nuvra_platform_win::renderer::RendererAction::ToggleMute => {
+                                    let _ = nuvra_platform_win::audio::toggle_microphone_mute();
+                                }
+                                nuvra_platform_win::renderer::RendererAction::ToggleGlassMode => {
+                                    let is_glass = renderer.is_glass_mode();
+                                    println!(
+                                        "Nuvra visual mode switched: {}",
+                                        if is_glass {
+                                            "Frosted Glass"
+                                        } else {
+                                            "Solid Opaque"
+                                        }
+                                    );
+                                }
+                                nuvra_platform_win::renderer::RendererAction::OpenSettings => {
+                                    // Open settings
+                                }
+                            }
+                        } else if engine.active_drawer().is_some() {
+                            engine.set_active_drawer(None);
+                        } else {
+                            engine.toggle_expand();
+                        }
                     } else {
                         engine.toggle_expand();
                     }
@@ -137,6 +174,16 @@ fn main() {
                         engine.toggle_expand();
                     } else if id == 1 {
                         let _ = nuvra_platform_win::audio::toggle_microphone_mute();
+                    } else if id == 3 {
+                        let is_glass = renderer.toggle_glass_mode();
+                        println!(
+                            "Nuvra visual mode switched: {}",
+                            if is_glass {
+                                "Frosted Glass"
+                            } else {
+                                "Solid Opaque"
+                            }
+                        );
                     }
                 }
                 WindowEvent::DpiChanged { new_dpi: _ } => {
