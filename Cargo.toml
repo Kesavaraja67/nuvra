@@ -51,6 +51,7 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Foundation",
     "Media_Audio",
+    "Media_Control",
     "ApplicationModel_DataTransfer",
     "UI_Notifications",
     "UI_ViewManagement",
