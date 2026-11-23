@@ -139,7 +139,7 @@ impl NotchRenderer {
                 .map_err(|e| format!("D2D EndDraw failed: {e}"))?;
 
             swapchain
-                .Present(1, windows::Win32::Graphics::Dxgi::DXGI_PRESENT(0))
+                .Present(0, windows::Win32::Graphics::Dxgi::DXGI_PRESENT(0))
                 .ok()
                 .map_err(|e| format!("DXGI Present failed: {e}"))?;
         }

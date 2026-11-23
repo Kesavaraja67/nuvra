@@ -16,8 +16,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_USERDATA,
     HTCLIENT, HTTRANSPARENT, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOWNA, WM_DESTROY,
     WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
-    WM_NCHITTEST, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    WM_NCHITTEST, WM_PAINT, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WM_ERASEBKGND,
 };
 
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -81,7 +81,7 @@ impl NotchWindow {
             let _ = RegisterClassExW(&wnd_class);
 
             let hwnd = CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 class_name,
                 w!("NuvraNotch"),
                 WS_POPUP,
@@ -282,8 +282,15 @@ unsafe extern "system" fn notch_wnd_proc(
             let _ = shared.event_tx.try_send(WindowEvent::DisplayChanged);
             LRESULT(0)
         }
+        WM_ERASEBKGND => {
+            // Tell Windows background is handled to prevent opaque background fills
+            LRESULT(1)
+        }
         WM_PAINT => {
-            // Painting handled via DirectComposition / DXGI swapchain
+            // Validate the client area so PeekMessage does not loop continuously on WM_PAINT
+            unsafe {
+                let _ = windows::Win32::Graphics::Gdi::ValidateRect(hwnd, None);
+            }
             LRESULT(0)
         }
         WM_DESTROY => {

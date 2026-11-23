@@ -1,21 +1,19 @@
 // nuvra-platform-win/src/dxgi.rs
-// D3D11 device + DXGI swap chain bootstrap for the notch renderer (ADR-0002).
-// ONLY file in the project permitted unsafe. Every block carries a SAFETY comment.
-//
-// Phase 0: Structure and type signatures only. Full implementation in v1.
-// UNVERIFIED — requires owner to run on Floor hardware with a D3D11 driver.
-// Manual test: docs/owner-test-scripts/phase-0-test-script.md § DXGI
+// D3D11 device + DXGI composition swap chain for the notch renderer (ADR-0002, D-STK-03).
+// Every unsafe block carries a // SAFETY: comment.
 
+use windows::core::Interface;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::{
     Direct3D::D3D_DRIVER_TYPE_HARDWARE,
     Direct3D11::{
-        D3D11CreateDeviceAndSwapChain, ID3D11Device, ID3D11DeviceContext,
-        D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
+        D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        D3D11_SDK_VERSION,
     },
     Dxgi::{
-        Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC},
-        IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        Common::{DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC},
+        IDXGIAdapter, IDXGIDevice, IDXGIFactory2, IDXGISwapChain, IDXGISwapChain1,
+        DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
         DXGI_USAGE_RENDER_TARGET_OUTPUT,
     },
 };
@@ -28,109 +26,121 @@ pub struct DeviceBundle {
     pub swapchain: IDXGISwapChain,
 }
 
-/// Create a hardware D3D11 device + flip-discard swap chain for `hwnd`.
+/// Create a hardware D3D11 device + composition swap chain with premultiplied alpha.
 /// Falls back to WARP software rasterizer when hardware is unavailable,
 /// so the notch renders on every machine including WARP-only CI/VM (D-PERF-01).
-///
-/// `width` and `height` are in physical pixels (already DPI-scaled by caller).
 pub fn create_device_and_swapchain(
-    hwnd: HWND,
+    _hwnd: HWND,
     width: u32,
     height: u32,
 ) -> Result<DeviceBundle, DxgiError> {
-    let desc = DXGI_SWAP_CHAIN_DESC {
-        BufferDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_MODE_DESC {
-            Width: width,
-            Height: height,
-            Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-            ..Default::default()
-        },
-        SampleDesc: DXGI_SAMPLE_DESC {
-            Count: 1,
-            Quality: 0,
-        },
-        BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-        BufferCount: 2,
-        OutputWindow: hwnd,
-        Windowed: true.into(),
-        SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
-        Flags: 0,
-    };
-
-    let mut device: Option<ID3D11Device> = None;
-    let mut context: Option<ID3D11DeviceContext> = None;
-    let mut swapchain: Option<IDXGISwapChain> = None;
-
     let force_warp = std::env::var("NUVRA_FORCE_WARP")
         .map(|v| v == "1")
         .unwrap_or(false);
 
-    if force_warp {
-        try_create_device(
-            windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
-            &desc,
-            &mut device,
-            &mut context,
-            &mut swapchain,
-        )
-        .map_err(|e| DxgiError::CreateDevice(format!("Forced WARP creation failed: {e:?}")))?;
-        tracing::info!("WARP adapter active");
+    let mut device: Option<ID3D11Device> = None;
+    let mut context: Option<ID3D11DeviceContext> = None;
+
+    let driver_type = if force_warp {
+        windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP
     } else {
-        // Try hardware first; fall back to WARP on failure.
-        let result = try_create_device(
-            D3D_DRIVER_TYPE_HARDWARE,
-            &desc,
-            &mut device,
-            &mut context,
-            &mut swapchain,
-        );
+        D3D_DRIVER_TYPE_HARDWARE
+    };
 
-        if result.is_err() {
-            try_create_device(
-                windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
-                &desc,
-                &mut device,
-                &mut context,
-                &mut swapchain,
-            )
-            .map_err(|e| DxgiError::CreateDevice(format!("WARP fallback failed: {e:?}")))?;
-            tracing::info!("WARP adapter active");
-        }
-    }
-
-    Ok(DeviceBundle {
-        device: device.ok_or(DxgiError::NullDevice)?,
-        context: context.ok_or(DxgiError::NullContext)?,
-        swapchain: swapchain.ok_or(DxgiError::NullSwapChain)?,
-    })
-}
-
-fn try_create_device(
-    driver_type: windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE,
-    desc: &DXGI_SWAP_CHAIN_DESC,
-    device_out: &mut Option<ID3D11Device>,
-    context_out: &mut Option<ID3D11DeviceContext>,
-    swapchain_out: &mut Option<IDXGISwapChain>,
-) -> windows::core::Result<()> {
-    // SAFETY: D3D11CreateDeviceAndSwapChain is a well-specified COM factory.
-    // All pointers written to `*_out` are valid COM objects valid for the
-    // lifetime of the call site. We immediately wrap them in Option<ComPtr>.
-    // The swap chain description is fully initialised above.
-    unsafe {
-        D3D11CreateDeviceAndSwapChain(
+    // SAFETY: D3D11CreateDevice initializes DirectX device and context.
+    let result = unsafe {
+        D3D11CreateDevice(
             None,
             driver_type,
             None,
             D3D11_CREATE_DEVICE_BGRA_SUPPORT,
             None,
             D3D11_SDK_VERSION,
-            Some(desc),
-            Some(swapchain_out as *mut _),
-            Some(device_out as *mut _),
+            Some(&mut device),
             None,
-            Some(context_out as *mut _),
+            Some(&mut context),
         )
+    };
+
+    if result.is_err() && !force_warp {
+        // SAFETY: Fallback to WARP software rasterizer if hardware adapter unavailable.
+        unsafe {
+            D3D11CreateDevice(
+                None,
+                windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
+                None,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                Some(&mut context),
+            )
+            .map_err(|e| DxgiError::CreateDevice(format!("WARP fallback failed: {e:?}")))?;
+        }
+        tracing::info!("WARP adapter active");
+    } else {
+        result.map_err(|e| DxgiError::CreateDevice(format!("Device creation failed: {e:?}")))?;
+        if force_warp {
+            tracing::info!("WARP adapter active");
+        }
     }
+
+    let device = device.ok_or(DxgiError::NullDevice)?;
+    let context = context.ok_or(DxgiError::NullContext)?;
+
+    // SAFETY: Query DXGI factory from D3D11 device to create composition swap chain.
+    let dxgi_device: IDXGIDevice = device
+        .cast()
+        .map_err(|e| DxgiError::CreateDevice(format!("Cast to IDXGIDevice failed: {e}")))?;
+
+    let adapter: IDXGIAdapter = unsafe {
+        dxgi_device
+            .GetAdapter()
+            .map_err(|e| DxgiError::CreateDevice(format!("GetAdapter failed: {e}")))?
+    };
+
+    let factory: IDXGIFactory2 = unsafe {
+        adapter
+            .GetParent()
+            .map_err(|e| DxgiError::CreateDevice(format!("GetParent IDXGIFactory2 failed: {e}")))?
+    };
+
+    let desc = DXGI_SWAP_CHAIN_DESC1 {
+        Width: width,
+        Height: height,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        Stereo: false.into(),
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        BufferCount: 2,
+        Scaling: DXGI_SCALING_STRETCH,
+        SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        AlphaMode: DXGI_ALPHA_MODE_PREMULTIPLIED,
+        Flags: 0,
+    };
+
+    // SAFETY: CreateSwapChainForComposition connects directly to DirectComposition visual tree with per-pixel alpha transparency.
+    let swapchain1: IDXGISwapChain1 = unsafe {
+        factory
+            .CreateSwapChainForComposition(&device, &desc, None)
+            .map_err(|e| {
+                DxgiError::CreateDevice(format!("CreateSwapChainForComposition failed: {e:?}"))
+            })?
+    };
+
+    let swapchain: IDXGISwapChain = swapchain1
+        .cast()
+        .map_err(|e| DxgiError::CreateDevice(format!("Cast to IDXGISwapChain failed: {e}")))?;
+
+    Ok(DeviceBundle {
+        device,
+        context,
+        swapchain,
+    })
 }
 
 #[derive(Debug)]
@@ -146,13 +156,13 @@ impl std::fmt::Display for DxgiError {
         match self {
             DxgiError::CreateDevice(msg) => write!(f, "D3D11 device creation failed: {msg}"),
             DxgiError::NullDevice => {
-                write!(f, "D3D11CreateDeviceAndSwapChain returned null device")
+                write!(f, "D3D11CreateDevice returned null device")
             }
             DxgiError::NullContext => {
-                write!(f, "D3D11CreateDeviceAndSwapChain returned null context")
+                write!(f, "D3D11CreateDevice returned null context")
             }
             DxgiError::NullSwapChain => {
-                write!(f, "D3D11CreateDeviceAndSwapChain returned null swap chain")
+                write!(f, "CreateSwapChainForComposition returned null swap chain")
             }
         }
     }

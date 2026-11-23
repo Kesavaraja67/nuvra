@@ -99,7 +99,7 @@ fn main() {
 
     // One-shot test exit mode for headless test runs
     let test_run = std::env::var("NUVRA_TEST_ONESHOT")
-        .map(|v| v == "1")
+        .map(|v| v.trim() == "1")
         .unwrap_or(false);
 
     // 9. Win32 message pump and spring simulation loop
