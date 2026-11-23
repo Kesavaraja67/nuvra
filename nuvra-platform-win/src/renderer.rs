@@ -9,15 +9,15 @@
 
 use windows::core::w;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D_POINT_2F, D2D_RECT_F, D2D1_COLOR_F, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED,
+    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
+    D2D_POINT_2F, D2D_RECT_F,
 };
 use windows::Win32::Graphics::Direct2D::{
-    D2D1CreateFactory, ID2D1Factory, ID2D1LinearGradientBrush, ID2D1PathGeometry,
-    ID2D1RenderTarget, ID2D1SolidColorBrush, D2D1_ALPHA_MODE_PREMULTIPLIED,
-    D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_FEATURE_LEVEL_DEFAULT,
-    D2D1_GAMMA_2_2, D2D1_GRADIENT_STOP, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_PIXEL_FORMAT,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
-    D2D1_ROUNDED_RECT,
+    D2D1CreateFactory, ID2D1Factory, ID2D1LinearGradientBrush, ID2D1RenderTarget,
+    ID2D1SolidColorBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP,
+    D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT, D2D1_GAMMA_2_2,
+    D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES,
+    D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_ROUNDED_RECT,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat, DWRITE_FACTORY_TYPE_SHARED,
@@ -86,7 +86,7 @@ pub struct NotchRenderer {
     badge_format: IDWriteTextFormat,
     caption_format: IDWriteTextFormat,
     _caption_trailing: IDWriteTextFormat,
-    caption_center: IDWriteTextFormat,
+    _caption_center: IDWriteTextFormat,
     ambient_format: IDWriteTextFormat,
     frame_counter: u32,
     pub is_glass_mode: bool,
@@ -418,7 +418,7 @@ impl NotchRenderer {
                 badge_format,
                 caption_format,
                 _caption_trailing: caption_trailing,
-                caption_center,
+                _caption_center: caption_center,
                 ambient_format,
                 frame_counter: 0,
                 is_glass_mode: true,
@@ -1675,12 +1675,9 @@ impl NotchRenderer {
 
 /// Fetches and formats real Windows local time matching the showcase format: "Mon, Nov 24  7:15 PM"
 fn get_current_date_time_string() -> String {
-    use windows::Win32::System::SystemInformation::{GetLocalTime, SYSTEMTIME};
-    let mut st = SYSTEMTIME::default();
-    // SAFETY: GetLocalTime writes to valid stack-allocated SYSTEMTIME struct.
-    unsafe {
-        GetLocalTime(&mut st);
-    }
+    use windows::Win32::System::SystemInformation::GetLocalTime;
+    // SAFETY: GetLocalTime returns valid Win32 SYSTEMTIME for local machine.
+    let st = unsafe { GetLocalTime() };
     let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     let months = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
