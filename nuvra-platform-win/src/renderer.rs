@@ -68,10 +68,11 @@ pub struct NotchRenderer {
     body_format: IDWriteTextFormat,
     badge_format: IDWriteTextFormat,
     caption_format: IDWriteTextFormat,
-    caption_trailing: IDWriteTextFormat,
+    _caption_trailing: IDWriteTextFormat,
     caption_center: IDWriteTextFormat,
     ambient_format: IDWriteTextFormat,
     frame_counter: u32,
+    pub active_tab: usize,
 }
 
 impl NotchRenderer {
@@ -365,12 +366,46 @@ impl NotchRenderer {
                 body_format,
                 badge_format,
                 caption_format,
-                caption_trailing,
+                _caption_trailing: caption_trailing,
                 caption_center,
                 ambient_format,
                 frame_counter: 0,
+                active_tab: 0,
             })
         }
+    }
+
+    pub fn active_tab(&self) -> usize {
+        self.active_tab
+    }
+
+    pub fn set_active_tab(&mut self, tab: usize) {
+        self.active_tab = tab.min(4);
+    }
+
+    /// Handles a click on the notch in window coordinates. Returns true if an interactive tab was selected.
+    pub fn handle_click(&mut self, x: f32, y: f32) -> bool {
+        // Top navigation bar icons:
+        // [Globe: 180, Bell: 215, Folder: 250, Clipboard: 285, Widgets: 320]
+        if (4.0..=34.0).contains(&y) {
+            if (x - 180.0).abs() <= 16.0 {
+                self.active_tab = 0;
+                return true;
+            } else if (x - 215.0).abs() <= 16.0 {
+                self.active_tab = 1;
+                return true;
+            } else if (x - 250.0).abs() <= 16.0 {
+                self.active_tab = 2;
+                return true;
+            } else if (x - 285.0).abs() <= 16.0 {
+                self.active_tab = 3;
+                return true;
+            } else if (x - 320.0).abs() <= 16.0 {
+                self.active_tab = 4;
+                return true;
+            }
+        }
+        false
     }
 
     /// Render a frame of the notch pill with full glassmorphic styling and present.
@@ -512,588 +547,1217 @@ impl NotchRenderer {
                 if params.height >= 160.0 {
                     // ══════════════════════════════════════════════════════════════════════
                     // EXPANDED VIEW (520 × 220 px) — D-WIN-08
-                    // Unified Floating Glass Stage (No clumsy sidebar, full-width clarity)
+                    // Modular Frosted Glass Notch (Pure Glassmorphism, Zero Skeuomorphism)
+                    // Matches user reference layout with top horizontal icon navigation
                     // ══════════════════════════════════════════════════════════════════════
                     let stage_x = params.x + 20.0;
                     let stage_r = params.x + params.width - 20.0;
 
-                    // ══════════════════════════════════════════════════════════════════════
-                    // ROW 1: ACOUSTIC MEDIA STAGE (y: params.y + 12.0 to params.y + 72.0)
-                    // ══════════════════════════════════════════════════════════════════════
-                    let art_rect = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: stage_x,
-                            top: params.y + 12.0,
-                            right: stage_x + 58.0,
-                            bottom: params.y + 70.0,
+                    // ── TOP HORIZONTAL ICON NAVIGATION STRIP (y: params.y + 10.0 to 30.0) ───
+                    // Icons: 0: 🌐 Sites/Media, 1: 🔔 Alerts, 2: 📁 Shelf, 3: 📋 Clipboard, 4: 🔲 Widgets, 5: 🎚️ Sound, 6: ⚙️ Settings
+                    let nav_icons_x = [180.0, 215.0, 250.0, 285.0, 320.0, 355.0, 395.0];
+                    let nav_y = params.y + 16.0;
+
+                    // Subtle divider before settings
+                    self.render_target.DrawLine(
+                        D2D_POINT_2F {
+                            x: params.x + 375.0,
+                            y: nav_y - 6.0,
                         },
-                        radiusX: 12.0,
-                        radiusY: 12.0,
-                    };
-                    // Glowing ambient halo behind album card
-                    let halo = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: stage_x - 3.0,
-                            top: params.y + 9.0,
-                            right: stage_x + 61.0,
-                            bottom: params.y + 73.0,
+                        D2D_POINT_2F {
+                            x: params.x + 375.0,
+                            y: nav_y + 6.0,
                         },
-                        radiusX: 15.0,
-                        radiusY: 15.0,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&halo, &self.accent_glow_brush);
-                    self.render_target
-                        .FillRoundedRectangle(&art_rect, &self.card_fill_brush);
-                    self.render_target.DrawRoundedRectangle(
-                        &art_rect,
                         &self.card_edge_brush,
                         1.0,
                         None,
                     );
 
-                    // Vinyl Disc Art Vector
-                    let vinyl_center = D2D_POINT_2F {
-                        x: stage_x + 29.0,
-                        y: params.y + 41.0,
-                    };
-                    let vinyl_outer = D2D1_ELLIPSE {
-                        point: vinyl_center,
-                        radiusX: 18.0,
-                        radiusY: 18.0,
-                    };
-                    self.render_target
-                        .DrawEllipse(&vinyl_outer, &self.accent_brush, 1.5, None);
-                    let vinyl_groove = D2D1_ELLIPSE {
-                        point: vinyl_center,
-                        radiusX: 11.0,
-                        radiusY: 11.0,
-                    };
-                    self.render_target
-                        .DrawEllipse(&vinyl_groove, &self.card_edge_brush, 1.0, None);
-                    let vinyl_core = D2D1_ELLIPSE {
-                        point: vinyl_center,
-                        radiusX: 4.0,
-                        radiusY: 4.0,
-                    };
-                    self.render_target
-                        .FillEllipse(&vinyl_core, &self.accent_brush);
-
-                    // Track Metadata (Title, Artist, and Live Pill)
-                    let title_r = D2D_RECT_F {
-                        left: stage_x + 68.0,
-                        top: params.y + 14.0,
-                        right: stage_r - 70.0,
-                        bottom: params.y + 34.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Now Playing • System Audio",
-                        &self.display_format,
-                        &self.text_primary_brush,
-                        &title_r,
-                    );
-
-                    let sub_r = D2D_RECT_F {
-                        left: stage_x + 68.0,
-                        top: params.y + 35.0,
-                        right: stage_r - 70.0,
-                        bottom: params.y + 51.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Spotify • High Fidelity Streaming",
-                        &self.body_format,
-                        &self.text_secondary_brush,
-                        &sub_r,
-                    );
-
-                    // Live Status Pill (No overlap)
-                    let badge_r = D2D_RECT_F {
-                        left: stage_x + 68.0,
-                        top: params.y + 53.0,
-                        right: stage_r - 70.0,
-                        bottom: params.y + 69.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "● AUDIO STREAM ACTIVE",
-                        &self.badge_format,
-                        &self.ok_brush,
-                        &badge_r,
-                    );
-
-                    // Live 6-bar Graphic Equalizer (Top Right, completely free of buttons!)
-                    let eq_x = stage_r - 54.0;
-                    let eq_base_y = params.y + 38.0;
-                    let time_phase = (self.frame_counter as f32) * 0.14;
-                    let eq_heights = [
-                        10.0 + (time_phase.sin() * 5.0).abs(),
-                        16.0 + ((time_phase * 1.3).sin() * 7.0).abs(),
-                        8.0 + ((time_phase * 0.9).cos() * 5.0).abs(),
-                        20.0 + ((time_phase * 1.5).sin() * 8.0).abs(),
-                        12.0 + ((time_phase * 1.1).cos() * 5.0).abs(),
-                        15.0 + ((time_phase * 0.7).sin() * 6.0).abs(),
-                    ];
-                    for (b, &bh) in eq_heights.iter().enumerate() {
-                        let bar_x = eq_x + (b as f32) * 6.0;
-                        let bar_rect = D2D1_ROUNDED_RECT {
-                            rect: D2D_RECT_F {
-                                left: bar_x,
-                                top: eq_base_y - bh / 2.0,
-                                right: bar_x + 2.5,
-                                bottom: eq_base_y + bh / 2.0,
-                            },
-                            radiusX: 1.0,
-                            radiusY: 1.0,
+                    for (idx, &ix_rel) in nav_icons_x.iter().enumerate() {
+                        let ix = params.x + ix_rel;
+                        let is_active = idx == self.active_tab;
+                        let brush = if is_active {
+                            &self.text_primary_brush
+                        } else {
+                            &self.text_tertiary_brush
                         };
-                        self.render_target
-                            .FillRoundedRectangle(&bar_rect, &self.accent_brush);
+
+                        match idx {
+                            0 => {
+                                // 0: Globe 🌐 (Sites & Audio)
+                                let globe = D2D1_ELLIPSE {
+                                    point: D2D_POINT_2F { x: ix, y: nav_y },
+                                    radiusX: 5.5,
+                                    radiusY: 5.5,
+                                };
+                                self.render_target.DrawEllipse(&globe, brush, 1.2, None);
+                                self.render_target.DrawLine(
+                                    D2D_POINT_2F {
+                                        x: ix - 5.5,
+                                        y: nav_y,
+                                    },
+                                    D2D_POINT_2F {
+                                        x: ix + 5.5,
+                                        y: nav_y,
+                                    },
+                                    brush,
+                                    1.0,
+                                    None,
+                                );
+                                let inner_g = D2D1_ELLIPSE {
+                                    point: D2D_POINT_2F { x: ix, y: nav_y },
+                                    radiusX: 2.8,
+                                    radiusY: 5.5,
+                                };
+                                self.render_target.DrawEllipse(&inner_g, brush, 1.0, None);
+                            }
+                            1 => {
+                                // 1: Bell 🔔 (Notifications)
+                                let b_top = D2D_POINT_2F {
+                                    x: ix,
+                                    y: nav_y - 5.0,
+                                };
+                                let b_bl = D2D_POINT_2F {
+                                    x: ix - 4.5,
+                                    y: nav_y + 3.0,
+                                };
+                                let b_br = D2D_POINT_2F {
+                                    x: ix + 4.5,
+                                    y: nav_y + 3.0,
+                                };
+                                self.render_target.DrawLine(b_top, b_bl, brush, 1.2, None);
+                                self.render_target.DrawLine(b_top, b_br, brush, 1.2, None);
+                                self.render_target.DrawLine(b_bl, b_br, brush, 1.2, None);
+                                let clap = D2D1_ELLIPSE {
+                                    point: D2D_POINT_2F {
+                                        x: ix,
+                                        y: nav_y + 4.5,
+                                    },
+                                    radiusX: 1.5,
+                                    radiusY: 1.5,
+                                };
+                                self.render_target.FillEllipse(&clap, brush);
+                            }
+                            2 => {
+                                // 2: Folder Tray 📁 (Shelf)
+                                let tray = D2D1_ROUNDED_RECT {
+                                    rect: D2D_RECT_F {
+                                        left: ix - 5.5,
+                                        top: nav_y - 3.5,
+                                        right: ix + 5.5,
+                                        bottom: nav_y + 4.5,
+                                    },
+                                    radiusX: 1.5,
+                                    radiusY: 1.5,
+                                };
+                                self.render_target
+                                    .DrawRoundedRectangle(&tray, brush, 1.2, None);
+                                self.render_target.DrawLine(
+                                    D2D_POINT_2F {
+                                        x: ix - 5.5,
+                                        y: nav_y - 4.5,
+                                    },
+                                    D2D_POINT_2F {
+                                        x: ix - 1.5,
+                                        y: nav_y - 4.5,
+                                    },
+                                    brush,
+                                    1.2,
+                                    None,
+                                );
+                            }
+                            3 => {
+                                // 3: Clipboard 📋 (Memory Vault)
+                                let board = D2D1_ROUNDED_RECT {
+                                    rect: D2D_RECT_F {
+                                        left: ix - 4.5,
+                                        top: nav_y - 4.5,
+                                        right: ix + 4.5,
+                                        bottom: nav_y + 5.0,
+                                    },
+                                    radiusX: 1.5,
+                                    radiusY: 1.5,
+                                };
+                                self.render_target
+                                    .DrawRoundedRectangle(&board, brush, 1.2, None);
+                                self.render_target.DrawLine(
+                                    D2D_POINT_2F {
+                                        x: ix - 2.5,
+                                        y: nav_y - 5.5,
+                                    },
+                                    D2D_POINT_2F {
+                                        x: ix + 2.5,
+                                        y: nav_y - 5.5,
+                                    },
+                                    brush,
+                                    1.2,
+                                    None,
+                                );
+                            }
+                            4 => {
+                                // 4: 2x2 Widgets Grid 🔲
+                                for row in 0..2 {
+                                    for col in 0..2 {
+                                        let sq = D2D1_ROUNDED_RECT {
+                                            rect: D2D_RECT_F {
+                                                left: ix - 4.5 + (col as f32) * 5.0,
+                                                top: nav_y - 4.5 + (row as f32) * 5.0,
+                                                right: ix - 1.0 + (col as f32) * 5.0,
+                                                bottom: nav_y - 1.0 + (row as f32) * 5.0,
+                                            },
+                                            radiusX: 0.8,
+                                            radiusY: 0.8,
+                                        };
+                                        self.render_target.FillRoundedRectangle(&sq, brush);
+                                    }
+                                }
+                            }
+                            5 => {
+                                // 5: Sound Sliders 🎚️
+                                for s in 0..3 {
+                                    let sx = ix - 4.5 + (s as f32) * 4.5;
+                                    self.render_target.DrawLine(
+                                        D2D_POINT_2F {
+                                            x: sx,
+                                            y: nav_y - 4.5,
+                                        },
+                                        D2D_POINT_2F {
+                                            x: sx,
+                                            y: nav_y + 4.5,
+                                        },
+                                        brush,
+                                        1.0,
+                                        None,
+                                    );
+                                    let dot_y = if s == 1 { nav_y + 1.5 } else { nav_y - 1.5 };
+                                    let s_dot = D2D1_ELLIPSE {
+                                        point: D2D_POINT_2F { x: sx, y: dot_y },
+                                        radiusX: 1.5,
+                                        radiusY: 1.5,
+                                    };
+                                    self.render_target.FillEllipse(&s_dot, brush);
+                                }
+                            }
+                            _ => {
+                                // 6: Settings Gear ⚙️
+                                let gear = D2D1_ELLIPSE {
+                                    point: D2D_POINT_2F { x: ix, y: nav_y },
+                                    radiusX: 4.5,
+                                    radiusY: 4.5,
+                                };
+                                self.render_target.DrawEllipse(&gear, brush, 1.2, None);
+                                let inner = D2D1_ELLIPSE {
+                                    point: D2D_POINT_2F { x: ix, y: nav_y },
+                                    radiusX: 1.8,
+                                    radiusY: 1.8,
+                                };
+                                self.render_target.FillEllipse(&inner, brush);
+                            }
+                        }
+
+                        // Active Indicator Dot beneath active icon (Reference screenshot design)
+                        if is_active {
+                            let dot = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: ix,
+                                    y: nav_y + 10.0,
+                                },
+                                radiusX: 1.5,
+                                radiusY: 1.5,
+                            };
+                            self.render_target
+                                .FillEllipse(&dot, &self.text_primary_brush);
+                        }
                     }
 
-                    // ══════════════════════════════════════════════════════════════════════
-                    // ROW 2: PLAYBACK CONTROLS & TIMELINE (y: params.y + 80.0 to 118.0)
-                    // ══════════════════════════════════════════════════════════════════════
-                    let ctrl_y = params.y + 98.0;
+                    // ── TAB CONTENT RENDERING (y: params.y + 36.0 to 184.0) ───────────────
+                    match self.active_tab {
+                        1 => {
+                            // ══════════════════════════════════════════════════════════════
+                            // TAB 1: NOTIFICATIONS (Matches Reference Image 98121fa1.jpg)
+                            // ══════════════════════════════════════════════════════════════
+                            let bell_cx = params.x + params.width / 2.0;
+                            let bell_cy = params.y + 88.0;
 
-                    // Unified Glass Playback Capsule
-                    let ctrl_capsule = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: stage_x,
-                            top: params.y + 82.0,
-                            right: stage_x + 96.0,
-                            bottom: params.y + 114.0,
-                        },
-                        radiusX: 16.0,
-                        radiusY: 16.0,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&ctrl_capsule, &self.card_fill_brush);
-                    self.render_target.DrawRoundedRectangle(
-                        &ctrl_capsule,
-                        &self.card_edge_brush,
-                        1.0,
-                        None,
-                    );
+                            // Minimalist vector bell
+                            let b_top = D2D_POINT_2F {
+                                x: bell_cx,
+                                y: bell_cy - 12.0,
+                            };
+                            let b_bl = D2D_POINT_2F {
+                                x: bell_cx - 11.0,
+                                y: bell_cy + 8.0,
+                            };
+                            let b_br = D2D_POINT_2F {
+                                x: bell_cx + 11.0,
+                                y: bell_cy + 8.0,
+                            };
+                            self.render_target.DrawLine(
+                                b_top,
+                                b_bl,
+                                &self.text_secondary_brush,
+                                1.8,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                b_top,
+                                b_br,
+                                &self.text_secondary_brush,
+                                1.8,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                b_bl,
+                                b_br,
+                                &self.text_secondary_brush,
+                                1.8,
+                                None,
+                            );
+                            let clap = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: bell_cx,
+                                    y: bell_cy + 12.0,
+                                },
+                                radiusX: 3.0,
+                                radiusY: 3.0,
+                            };
+                            self.render_target
+                                .FillEllipse(&clap, &self.text_secondary_brush);
 
-                    // Previous Track: |◀◀
-                    let prev_cx = stage_x + 18.0;
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: prev_cx - 4.5,
-                            y: ctrl_y - 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: prev_cx - 4.5,
-                            y: ctrl_y + 5.0,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: prev_cx + 3.5,
-                            y: ctrl_y - 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: prev_cx - 3.5,
-                            y: ctrl_y,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: prev_cx + 3.5,
-                            y: ctrl_y + 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: prev_cx - 3.5,
-                            y: ctrl_y,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
+                            // Empty state text matching reference
+                            let title_r = D2D_RECT_F {
+                                left: stage_x,
+                                top: params.y + 114.0,
+                                right: stage_r,
+                                bottom: params.y + 134.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Nothing yet",
+                                &self.title_format,
+                                &self.text_primary_brush,
+                                &title_r,
+                            );
 
-                    // Play Button Circle (Luminous Accent)
-                    let play_cx = stage_x + 48.0;
-                    let play_circle = D2D1_ELLIPSE {
-                        point: D2D_POINT_2F {
-                            x: play_cx,
-                            y: ctrl_y,
-                        },
-                        radiusX: 11.5,
-                        radiusY: 11.5,
-                    };
-                    self.render_target
-                        .FillEllipse(&play_circle, &self.accent_brush);
-                    let p1 = D2D_POINT_2F {
-                        x: play_cx - 3.0,
-                        y: ctrl_y - 4.5,
-                    };
-                    let p2 = D2D_POINT_2F {
-                        x: play_cx + 4.5,
-                        y: ctrl_y,
-                    };
-                    let p3 = D2D_POINT_2F {
-                        x: play_cx - 3.0,
-                        y: ctrl_y + 4.5,
-                    };
-                    self.render_target
-                        .DrawLine(p1, p2, &self.glass_fill_brush, 2.0, None);
-                    self.render_target
-                        .DrawLine(p2, p3, &self.glass_fill_brush, 2.0, None);
-                    self.render_target
-                        .DrawLine(p3, p1, &self.glass_fill_brush, 2.0, None);
+                            let sub_r = D2D_RECT_F {
+                                left: stage_x,
+                                top: params.y + 136.0,
+                                right: stage_r,
+                                bottom: params.y + 154.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "What the island says lands here. Click one to open it.",
+                                &self.body_format,
+                                &self.text_secondary_brush,
+                                &sub_r,
+                            );
+                        }
+                        2 => {
+                            // ══════════════════════════════════════════════════════════════
+                            // TAB 2: FILE SHELF (Staging Drop Zone)
+                            // ══════════════════════════════════════════════════════════════
+                            let shelf_rect = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x,
+                                    top: params.y + 40.0,
+                                    right: stage_r,
+                                    bottom: params.y + 176.0,
+                                },
+                                radiusX: 14.0,
+                                radiusY: 14.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&shelf_rect, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &shelf_rect,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
 
-                    // Next Track: ▶▶|
-                    let next_cx = stage_x + 78.0;
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: next_cx + 4.5,
-                            y: ctrl_y - 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: next_cx + 4.5,
-                            y: ctrl_y + 5.0,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: next_cx - 3.5,
-                            y: ctrl_y - 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: next_cx + 3.5,
-                            y: ctrl_y,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
-                    self.render_target.DrawLine(
-                        D2D_POINT_2F {
-                            x: next_cx - 3.5,
-                            y: ctrl_y + 5.0,
-                        },
-                        D2D_POINT_2F {
-                            x: next_cx + 3.5,
-                            y: ctrl_y,
-                        },
-                        &self.text_secondary_brush,
-                        1.5,
-                        None,
-                    );
+                            let cx = params.x + params.width / 2.0;
+                            // Clean Folder Glyph
+                            let f_body = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: cx - 18.0,
+                                    top: params.y + 74.0,
+                                    right: cx + 18.0,
+                                    bottom: params.y + 98.0,
+                                },
+                                radiusX: 3.0,
+                                radiusY: 3.0,
+                            };
+                            self.render_target.DrawRoundedRectangle(
+                                &f_body,
+                                &self.accent_brush,
+                                1.5,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: cx - 18.0,
+                                    y: params.y + 70.0,
+                                },
+                                D2D_POINT_2F {
+                                    x: cx - 6.0,
+                                    y: params.y + 70.0,
+                                },
+                                &self.accent_brush,
+                                1.5,
+                                None,
+                            );
 
-                    // Timeline & Progress Track (x: stage_x + 108.0 to stage_r)
-                    let seek_start_x = stage_x + 148.0;
-                    let seek_end_x = stage_r - 46.0;
+                            let title_r = D2D_RECT_F {
+                                left: stage_x,
+                                top: params.y + 108.0,
+                                right: stage_r,
+                                bottom: params.y + 128.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Drop files here to stage or transfer",
+                                &self.title_format,
+                                &self.text_primary_brush,
+                                &title_r,
+                            );
 
-                    let time_l = D2D_RECT_F {
-                        left: stage_x + 106.0,
-                        top: params.y + 88.0,
-                        right: stage_x + 144.0,
-                        bottom: params.y + 106.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "01:24",
-                        &self.caption_format,
-                        &self.text_tertiary_brush,
-                        &time_l,
-                    );
+                            let sub_r = D2D_RECT_F {
+                                left: stage_x,
+                                top: params.y + 130.0,
+                                right: stage_r,
+                                bottom: params.y + 148.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Staged items are held in memory for 1-click sharing to companion",
+                                &self.body_format,
+                                &self.text_secondary_brush,
+                                &sub_r,
+                            );
 
-                    let seek_bg = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: seek_start_x,
-                            top: ctrl_y - 1.5,
-                            right: seek_end_x,
-                            bottom: ctrl_y + 1.5,
-                        },
-                        radiusX: 1.5,
-                        radiusY: 1.5,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&seek_bg, &self.card_edge_brush);
+                            let status_r = D2D_RECT_F {
+                                left: stage_x,
+                                top: params.y + 152.0,
+                                right: stage_r,
+                                bottom: params.y + 168.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "● FILE SHELF READY • 0 ITEMS STAGED",
+                                &self.badge_format,
+                                &self.ok_brush,
+                                &status_r,
+                            );
+                        }
+                        3 => {
+                            // ══════════════════════════════════════════════════════════════
+                            // TAB 3: CLIPBOARD VAULT (Encrypted History)
+                            // ══════════════════════════════════════════════════════════════
+                            let clip_items = [
+                                (
+                                    "https://github.com/Kesavaraja67/nuvra",
+                                    "Copied from Browser • Click to Copy",
+                                    "[ RECENT ]",
+                                ),
+                                (
+                                    "cargo run -p nuvra-app",
+                                    "Copied from Terminal • 2m ago",
+                                    "[ CODE ]",
+                                ),
+                                (
+                                    "Microphone Endpoint Active (Ctrl+Alt+M)",
+                                    "Hardware state snippet",
+                                    "[ HARDWARE ]",
+                                ),
+                            ];
 
-                    let progress_ratio = 0.42;
-                    let thumb_x = seek_start_x + (seek_end_x - seek_start_x) * progress_ratio;
+                            for (i, (val, sub, badge)) in clip_items.iter().enumerate() {
+                                let cy = params.y + 40.0 + (i as f32) * 44.0;
+                                let c_rect = D2D1_ROUNDED_RECT {
+                                    rect: D2D_RECT_F {
+                                        left: stage_x,
+                                        top: cy,
+                                        right: stage_r,
+                                        bottom: cy + 38.0,
+                                    },
+                                    radiusX: 10.0,
+                                    radiusY: 10.0,
+                                };
+                                self.render_target
+                                    .FillRoundedRectangle(&c_rect, &self.card_fill_brush);
+                                self.render_target.DrawRoundedRectangle(
+                                    &c_rect,
+                                    &self.card_edge_brush,
+                                    1.0,
+                                    None,
+                                );
 
-                    let seek_fill = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: seek_start_x,
-                            top: ctrl_y - 1.5,
-                            right: thumb_x,
-                            bottom: ctrl_y + 1.5,
-                        },
-                        radiusX: 1.5,
-                        radiusY: 1.5,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&seek_fill, &self.accent_brush);
+                                let v_rect = D2D_RECT_F {
+                                    left: stage_x + 12.0,
+                                    top: cy + 4.0,
+                                    right: stage_r - 90.0,
+                                    bottom: cy + 20.0,
+                                };
+                                draw_text(
+                                    &self.render_target,
+                                    val,
+                                    &self.body_format,
+                                    &self.text_primary_brush,
+                                    &v_rect,
+                                );
 
-                    // Glowing Scrubber Thumb
-                    let thumb = D2D1_ELLIPSE {
-                        point: D2D_POINT_2F {
-                            x: thumb_x,
-                            y: ctrl_y,
-                        },
-                        radiusX: 4.5,
-                        radiusY: 4.5,
-                    };
-                    self.render_target
-                        .FillEllipse(&thumb, &self.text_primary_brush);
+                                let s_rect = D2D_RECT_F {
+                                    left: stage_x + 12.0,
+                                    top: cy + 20.0,
+                                    right: stage_r - 90.0,
+                                    bottom: cy + 34.0,
+                                };
+                                draw_text(
+                                    &self.render_target,
+                                    sub,
+                                    &self.caption_format,
+                                    &self.text_secondary_brush,
+                                    &s_rect,
+                                );
 
-                    let time_r = D2D_RECT_F {
-                        left: stage_r - 42.0,
-                        top: params.y + 88.0,
-                        right: stage_r,
-                        bottom: params.y + 106.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "03:45",
-                        &self.caption_trailing,
-                        &self.text_tertiary_brush,
-                        &time_r,
-                    );
+                                let b_rect = D2D_RECT_F {
+                                    left: stage_r - 85.0,
+                                    top: cy + 10.0,
+                                    right: stage_r - 10.0,
+                                    bottom: cy + 28.0,
+                                };
+                                draw_text(
+                                    &self.render_target,
+                                    badge,
+                                    &self.badge_format,
+                                    &self.accent_brush,
+                                    &b_rect,
+                                );
+                            }
+                        }
+                        4 => {
+                            // ══════════════════════════════════════════════════════════════
+                            // TAB 4: WIDGETS (Matches Reference Image a7d3eca6.jpg 2x2 grid)
+                            // ══════════════════════════════════════════════════════════════
+                            let qw = (stage_r - stage_x - 12.0) / 2.0;
+                            let qh = 66.0;
 
-                    // ══════════════════════════════════════════════════════════════════════
-                    // ROW 3: HARDWARE & TOOL CAPSULES (y: params.y + 124.0 to 184.0)
-                    // ══════════════════════════════════════════════════════════════════════
-                    let card_gap = 10.0;
-                    let card_w = (stage_r - stage_x - card_gap * 2.0) / 3.0;
-                    let card_y = params.y + 124.0;
-                    let card_h = 58.0;
+                            // 1. Top-Left: Date & Calendar
+                            let w1 = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x,
+                                    top: params.y + 38.0,
+                                    right: stage_x + qw,
+                                    bottom: params.y + 38.0 + qh,
+                                },
+                                radiusX: 12.0,
+                                radiusY: 12.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&w1, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &w1,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
 
-                    // ── Card 1: Microphone Hardware Capsule ────────────────────────
-                    let c1_rect = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: stage_x,
-                            top: card_y,
-                            right: stage_x + card_w,
-                            bottom: card_y + card_h,
-                        },
-                        radiusX: 10.0,
-                        radiusY: 10.0,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&c1_rect, &self.card_fill_brush);
-                    self.render_target.DrawRoundedRectangle(
-                        &c1_rect,
-                        &self.card_edge_brush,
-                        1.0,
-                        None,
-                    );
+                            let d_big = D2D_RECT_F {
+                                left: stage_x + 12.0,
+                                top: params.y + 40.0,
+                                right: stage_x + 50.0,
+                                bottom: params.y + 70.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "23",
+                                &self.display_format,
+                                &self.text_primary_brush,
+                                &d_big,
+                            );
 
-                    let c1_dot = D2D1_ELLIPSE {
-                        point: D2D_POINT_2F {
-                            x: stage_x + 14.0,
-                            y: card_y + 16.0,
-                        },
-                        radiusX: 3.5,
-                        radiusY: 3.5,
-                    };
-                    self.render_target.FillEllipse(&c1_dot, &self.ok_brush);
+                            let d_meta = D2D_RECT_F {
+                                left: stage_x + 48.0,
+                                top: params.y + 42.0,
+                                right: stage_x + qw - 8.0,
+                                bottom: params.y + 58.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "MON  NOV  •  Week 48",
+                                &self.badge_format,
+                                &self.text_secondary_brush,
+                                &d_meta,
+                            );
 
-                    let c1_title = D2D_RECT_F {
-                        left: stage_x + 24.0,
-                        top: card_y + 8.0,
-                        right: stage_x + card_w - 6.0,
-                        bottom: card_y + 24.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "MICROPHONE",
-                        &self.title_format,
-                        &self.text_primary_brush,
-                        &c1_title,
-                    );
+                            let strip_r = D2D_RECT_F {
+                                left: stage_x + 12.0,
+                                top: params.y + 76.0,
+                                right: stage_x + qw - 12.0,
+                                bottom: params.y + 98.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "S   M   T   W   T   F   S",
+                                &self.caption_format,
+                                &self.text_tertiary_brush,
+                                &strip_r,
+                            );
 
-                    let c1_val = D2D_RECT_F {
-                        left: stage_x + 10.0,
-                        top: card_y + 25.0,
-                        right: stage_x + card_w - 6.0,
-                        bottom: card_y + 40.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Status: Active (100%)",
-                        &self.body_format,
-                        &self.text_secondary_brush,
-                        &c1_val,
-                    );
+                            // Highlight active day in capsule
+                            let day_cap = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x + 36.0,
+                                    top: params.y + 74.0,
+                                    right: stage_x + 56.0,
+                                    bottom: params.y + 98.0,
+                                },
+                                radiusX: 6.0,
+                                radiusY: 6.0,
+                            };
+                            self.render_target.DrawRoundedRectangle(
+                                &day_cap,
+                                &self.accent_brush,
+                                1.2,
+                                None,
+                            );
 
-                    let c1_hotkey = D2D_RECT_F {
-                        left: stage_x + 10.0,
-                        top: card_y + 41.0,
-                        right: stage_x + card_w - 6.0,
-                        bottom: card_y + 55.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Ctrl+Alt+M to Mute",
-                        &self.caption_format,
-                        &self.text_tertiary_brush,
-                        &c1_hotkey,
-                    );
+                            // 2. Top-Right: Focus Timer (25 + 5 min)
+                            let w2 = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x + qw + 12.0,
+                                    top: params.y + 38.0,
+                                    right: stage_r,
+                                    bottom: params.y + 38.0 + qh,
+                                },
+                                radiusX: 12.0,
+                                radiusY: 12.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&w2, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &w2,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
 
-                    // ── Card 2: Memory Clipboard Capsule ───────────────────────────
-                    let c2_x = stage_x + card_w + card_gap;
-                    let c2_rect = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: c2_x,
-                            top: card_y,
-                            right: c2_x + card_w,
-                            bottom: card_y + card_h,
-                        },
-                        radiusX: 10.0,
-                        radiusY: 10.0,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&c2_rect, &self.card_fill_brush);
-                    self.render_target.DrawRoundedRectangle(
-                        &c2_rect,
-                        &self.card_edge_brush,
-                        1.0,
-                        None,
-                    );
+                            let timer_dial = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: stage_x + qw + 34.0,
+                                    y: params.y + 71.0,
+                                },
+                                radiusX: 18.0,
+                                radiusY: 18.0,
+                            };
+                            self.render_target.DrawEllipse(
+                                &timer_dial,
+                                &self.card_edge_brush,
+                                2.0,
+                                None,
+                            );
+                            let t_text = D2D_RECT_F {
+                                left: stage_x + qw + 16.0,
+                                top: params.y + 61.0,
+                                right: stage_x + qw + 52.0,
+                                bottom: params.y + 81.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "25:00",
+                                &self.badge_format,
+                                &self.text_primary_brush,
+                                &t_text,
+                            );
 
-                    let c2_dot = D2D1_ELLIPSE {
-                        point: D2D_POINT_2F {
-                            x: c2_x + 14.0,
-                            y: card_y + 16.0,
-                        },
-                        radiusX: 3.5,
-                        radiusY: 3.5,
-                    };
-                    self.render_target.FillEllipse(&c2_dot, &self.accent_brush);
+                            let t_label = D2D_RECT_F {
+                                left: stage_x + qw + 60.0,
+                                top: params.y + 44.0,
+                                right: stage_r - 8.0,
+                                bottom: params.y + 60.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Focus timer",
+                                &self.title_format,
+                                &self.text_primary_brush,
+                                &t_label,
+                            );
 
-                    let c2_title = D2D_RECT_F {
-                        left: c2_x + 24.0,
-                        top: card_y + 8.0,
-                        right: c2_x + card_w - 6.0,
-                        bottom: card_y + 24.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "CLIPBOARD",
-                        &self.title_format,
-                        &self.text_primary_brush,
-                        &c2_title,
-                    );
+                            let t_sub = D2D_RECT_F {
+                                left: stage_x + qw + 60.0,
+                                top: params.y + 60.0,
+                                right: stage_r - 8.0,
+                                bottom: params.y + 74.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "25 + 5 min",
+                                &self.caption_format,
+                                &self.text_secondary_brush,
+                                &t_sub,
+                            );
 
-                    let c2_val = D2D_RECT_F {
-                        left: c2_x + 10.0,
-                        top: card_y + 25.0,
-                        right: c2_x + card_w - 6.0,
-                        bottom: card_y + 40.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Encrypted AES-GCM",
-                        &self.body_format,
-                        &self.text_secondary_brush,
-                        &c2_val,
-                    );
+                            // Mini play button
+                            let play_btn = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: stage_x + qw + 72.0,
+                                    y: params.y + 88.0,
+                                },
+                                radiusX: 8.0,
+                                radiusY: 8.0,
+                            };
+                            self.render_target
+                                .FillEllipse(&play_btn, &self.text_primary_brush);
 
-                    let c2_hotkey = D2D_RECT_F {
-                        left: c2_x + 10.0,
-                        top: card_y + 41.0,
-                        right: c2_x + card_w - 6.0,
-                        bottom: card_y + 55.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Ctrl+Alt+V History",
-                        &self.caption_format,
-                        &self.text_tertiary_brush,
-                        &c2_hotkey,
-                    );
+                            // 3. Bottom-Left: Weather Widget
+                            let w3 = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x,
+                                    top: params.y + 112.0,
+                                    right: stage_x + qw,
+                                    bottom: params.y + 112.0 + qh,
+                                },
+                                radiusX: 12.0,
+                                radiusY: 12.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&w3, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &w3,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
 
-                    // ── Card 3: Files Staging Shelf ────────────────────────────────
-                    let c3_x = c2_x + card_w + card_gap;
-                    let c3_rect = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: c3_x,
-                            top: card_y,
-                            right: stage_r,
-                            bottom: card_y + card_h,
-                        },
-                        radiusX: 10.0,
-                        radiusY: 10.0,
-                    };
-                    self.render_target
-                        .FillRoundedRectangle(&c3_rect, &self.card_fill_brush);
-                    self.render_target.DrawRoundedRectangle(
-                        &c3_rect,
-                        &self.card_edge_brush,
-                        1.0,
-                        None,
-                    );
+                            let temp_r = D2D_RECT_F {
+                                left: stage_x + 12.0,
+                                top: params.y + 116.0,
+                                right: stage_x + 60.0,
+                                bottom: params.y + 148.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "29°",
+                                &self.display_format,
+                                &self.text_primary_brush,
+                                &temp_r,
+                            );
 
-                    let c3_dot = D2D1_ELLIPSE {
-                        point: D2D_POINT_2F {
-                            x: c3_x + 14.0,
-                            y: card_y + 16.0,
-                        },
-                        radiusX: 3.5,
-                        radiusY: 3.5,
-                    };
-                    self.render_target
-                        .FillEllipse(&c3_dot, &self.text_secondary_brush);
+                            let w_sub = D2D_RECT_F {
+                                left: stage_x + 12.0,
+                                top: params.y + 152.0,
+                                right: stage_x + qw - 8.0,
+                                bottom: params.y + 170.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Cloudy   •   H 29°  L 21°",
+                                &self.body_format,
+                                &self.text_secondary_brush,
+                                &w_sub,
+                            );
 
-                    let c3_title = D2D_RECT_F {
-                        left: c3_x + 24.0,
-                        top: card_y + 8.0,
-                        right: stage_r - 6.0,
-                        bottom: card_y + 24.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "FILE SHELF",
-                        &self.title_format,
-                        &self.text_primary_brush,
-                        &c3_title,
-                    );
+                            // Cloud glyph
+                            let cloud_cx = stage_x + qw - 30.0;
+                            let cloud_cy = params.y + 134.0;
+                            let cl_c = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: cloud_cx,
+                                    y: cloud_cy,
+                                },
+                                radiusX: 9.0,
+                                radiusY: 6.0,
+                            };
+                            self.render_target.DrawEllipse(
+                                &cl_c,
+                                &self.text_secondary_brush,
+                                1.2,
+                                None,
+                            );
 
-                    let c3_val = D2D_RECT_F {
-                        left: c3_x + 10.0,
-                        top: card_y + 25.0,
-                        right: stage_r - 6.0,
-                        bottom: card_y + 40.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Staging Ready",
-                        &self.body_format,
-                        &self.text_secondary_brush,
-                        &c3_val,
-                    );
+                            // 4. Bottom-Right: System Performance Monitor
+                            let w4 = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x + qw + 12.0,
+                                    top: params.y + 112.0,
+                                    right: stage_r,
+                                    bottom: params.y + 112.0 + qh,
+                                },
+                                radiusX: 12.0,
+                                radiusY: 12.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&w4, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &w4,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
 
-                    let c3_hotkey = D2D_RECT_F {
-                        left: c3_x + 10.0,
-                        top: card_y + 41.0,
-                        right: stage_r - 6.0,
-                        bottom: card_y + 55.0,
-                    };
-                    draw_text(
-                        &self.render_target,
-                        "Drop Files Here",
-                        &self.caption_format,
-                        &self.text_tertiary_brush,
-                        &c3_hotkey,
-                    );
+                            let sys_r1 = D2D_RECT_F {
+                                left: stage_x + qw + 20.0,
+                                top: params.y + 116.0,
+                                right: stage_r - 12.0,
+                                bottom: params.y + 132.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "CPU   18%   62°",
+                                &self.caption_format,
+                                &self.text_primary_brush,
+                                &sys_r1,
+                            );
 
-                    // ══════════════════════════════════════════════════════════════════════
-                    // ROW 4: FOOTER HINT (y: params.y + 194.0 to 214.0)
-                    // ══════════════════════════════════════════════════════════════════════
+                            let sys_r2 = D2D_RECT_F {
+                                left: stage_x + qw + 20.0,
+                                top: params.y + 132.0,
+                                right: stage_r - 12.0,
+                                bottom: params.y + 148.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "GPU   10%   58°",
+                                &self.caption_format,
+                                &self.text_secondary_brush,
+                                &sys_r2,
+                            );
+
+                            let sys_r3 = D2D_RECT_F {
+                                left: stage_x + qw + 20.0,
+                                top: params.y + 148.0,
+                                right: stage_r - 12.0,
+                                bottom: params.y + 164.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "RAM   79%   •   ↓ 522 B/s  ↑ 294 B/s",
+                                &self.caption_format,
+                                &self.accent_brush,
+                                &sys_r3,
+                            );
+
+                            // Center Bell Floating Button (Reference image design)
+                            let mid_bell = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: stage_x + qw + 6.0,
+                                    y: params.y + 109.0,
+                                },
+                                radiusX: 14.0,
+                                radiusY: 14.0,
+                            };
+                            self.render_target
+                                .FillEllipse(&mid_bell, &self.card_fill_brush);
+                            self.render_target.DrawEllipse(
+                                &mid_bell,
+                                &self.card_edge_brush,
+                                1.2,
+                                None,
+                            );
+                            let mb_dot = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: stage_x + qw + 6.0,
+                                    y: params.y + 109.0,
+                                },
+                                radiusX: 3.5,
+                                radiusY: 3.5,
+                            };
+                            self.render_target
+                                .FillEllipse(&mb_dot, &self.text_primary_brush);
+                        }
+                        _ => {
+                            // ══════════════════════════════════════════════════════════════
+                            // TAB 0 (DEFAULT): SITES & AUDIO (Matches Reference Image c61565b9.jpg)
+                            // ══════════════════════════════════════════════════════════════
+
+                            // 1. Now Playing Glass Player Tile (y: params.y + 36.0 to 98.0)
+                            let p_tile = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x,
+                                    top: params.y + 36.0,
+                                    right: stage_r,
+                                    bottom: params.y + 98.0,
+                                },
+                                radiusX: 12.0,
+                                radiusY: 12.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&p_tile, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &p_tile,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
+
+                            // Left music tile (38x38 px)
+                            let art_box = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_x + 10.0,
+                                    top: params.y + 44.0,
+                                    right: stage_x + 48.0,
+                                    bottom: params.y + 82.0,
+                                },
+                                radiusX: 8.0,
+                                radiusY: 8.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&art_box, &self.accent_brush);
+                            // White music waveform icon inside art box
+                            for b in 0..3 {
+                                let bx = stage_x + 22.0 + (b as f32) * 5.0;
+                                let bh = if b == 1 { 14.0 } else { 8.0 };
+                                self.render_target.DrawLine(
+                                    D2D_POINT_2F {
+                                        x: bx,
+                                        y: params.y + 63.0 - bh / 2.0,
+                                    },
+                                    D2D_POINT_2F {
+                                        x: bx,
+                                        y: params.y + 63.0 + bh / 2.0,
+                                    },
+                                    &self.text_primary_brush,
+                                    1.8,
+                                    None,
+                                );
+                            }
+
+                            // Track Info
+                            let title_r = D2D_RECT_F {
+                                left: stage_x + 58.0,
+                                top: params.y + 42.0,
+                                right: stage_r - 120.0,
+                                bottom: params.y + 60.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Midnight City • M83",
+                                &self.title_format,
+                                &self.text_primary_brush,
+                                &title_r,
+                            );
+
+                            let sub_r = D2D_RECT_F {
+                                left: stage_x + 58.0,
+                                top: params.y + 60.0,
+                                right: stage_r - 120.0,
+                                bottom: params.y + 76.0,
+                            };
+                            draw_text(
+                                &self.render_target,
+                                "Spotify • Lossless Audio Streaming",
+                                &self.caption_format,
+                                &self.text_secondary_brush,
+                                &sub_r,
+                            );
+
+                            // Seekbar Line
+                            let s_start = stage_x + 58.0;
+                            let s_end = stage_r - 130.0;
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: s_start,
+                                    y: params.y + 82.0,
+                                },
+                                D2D_POINT_2F {
+                                    x: s_end,
+                                    y: params.y + 82.0,
+                                },
+                                &self.card_edge_brush,
+                                2.5,
+                                None,
+                            );
+                            let s_prog = s_start + (s_end - s_start) * 0.42;
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: s_start,
+                                    y: params.y + 82.0,
+                                },
+                                D2D_POINT_2F {
+                                    x: s_prog,
+                                    y: params.y + 82.0,
+                                },
+                                &self.accent_brush,
+                                2.5,
+                                None,
+                            );
+                            let s_knob = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F {
+                                    x: s_prog,
+                                    y: params.y + 82.0,
+                                },
+                                radiusX: 4.0,
+                                radiusY: 4.0,
+                            };
+                            self.render_target
+                                .FillEllipse(&s_knob, &self.text_primary_brush);
+
+                            // Playback buttons capsule
+                            let pb_r = D2D1_ROUNDED_RECT {
+                                rect: D2D_RECT_F {
+                                    left: stage_r - 110.0,
+                                    top: params.y + 50.0,
+                                    right: stage_r - 10.0,
+                                    bottom: params.y + 84.0,
+                                },
+                                radiusX: 14.0,
+                                radiusY: 14.0,
+                            };
+                            self.render_target
+                                .FillRoundedRectangle(&pb_r, &self.card_fill_brush);
+                            self.render_target.DrawRoundedRectangle(
+                                &pb_r,
+                                &self.card_edge_brush,
+                                1.0,
+                                None,
+                            );
+
+                            let p_cx = stage_r - 60.0;
+                            let p_cy = params.y + 67.0;
+
+                            // Prev: |◀
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx - 28.0,
+                                    y: p_cy - 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx - 28.0,
+                                    y: p_cy + 4.5,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx - 22.0,
+                                    y: p_cy - 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx - 28.0,
+                                    y: p_cy,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx - 22.0,
+                                    y: p_cy + 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx - 28.0,
+                                    y: p_cy,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+
+                            // Play center circle
+                            let play_c = D2D1_ELLIPSE {
+                                point: D2D_POINT_2F { x: p_cx, y: p_cy },
+                                radiusX: 9.0,
+                                radiusY: 9.0,
+                            };
+                            self.render_target.FillEllipse(&play_c, &self.accent_brush);
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx - 2.5,
+                                    y: p_cy - 3.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx + 3.5,
+                                    y: p_cy,
+                                },
+                                &self.text_primary_brush,
+                                1.6,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx + 3.5,
+                                    y: p_cy,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx - 2.5,
+                                    y: p_cy + 3.5,
+                                },
+                                &self.text_primary_brush,
+                                1.6,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx - 2.5,
+                                    y: p_cy + 3.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx - 2.5,
+                                    y: p_cy - 3.5,
+                                },
+                                &self.text_primary_brush,
+                                1.6,
+                                None,
+                            );
+
+                            // Next: ▶|
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx + 28.0,
+                                    y: p_cy - 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx + 28.0,
+                                    y: p_cy + 4.5,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx + 22.0,
+                                    y: p_cy - 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx + 28.0,
+                                    y: p_cy,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+                            self.render_target.DrawLine(
+                                D2D_POINT_2F {
+                                    x: p_cx + 22.0,
+                                    y: p_cy + 4.5,
+                                },
+                                D2D_POINT_2F {
+                                    x: p_cx + 28.0,
+                                    y: p_cy,
+                                },
+                                &self.text_secondary_brush,
+                                1.5,
+                                None,
+                            );
+
+                            // 2. Four Quick Site Cards (y: params.y + 110.0 to 176.0)
+                            let card_w = 112.0;
+                            let card_gap = 10.0;
+                            let card_y = params.y + 110.0;
+                            let card_h = 66.0;
+
+                            let sites = [
+                                ("YT Music", "music.you...", true, false),
+                                ("YouTube", "youtube.c...", true, false),
+                                ("Spotify", "open.spoti...", false, false),
+                                ("+ Add a site", "", false, true),
+                            ];
+
+                            for (i, (s_name, s_url, is_red, is_dashed)) in sites.iter().enumerate()
+                            {
+                                let cx_box = stage_x + (i as f32) * (card_w + card_gap);
+                                let box_r = D2D1_ROUNDED_RECT {
+                                    rect: D2D_RECT_F {
+                                        left: cx_box,
+                                        top: card_y,
+                                        right: cx_box + card_w,
+                                        bottom: card_y + card_h,
+                                    },
+                                    radiusX: 12.0,
+                                    radiusY: 12.0,
+                                };
+                                self.render_target
+                                    .FillRoundedRectangle(&box_r, &self.card_fill_brush);
+                                self.render_target.DrawRoundedRectangle(
+                                    &box_r,
+                                    &self.card_edge_brush,
+                                    1.0,
+                                    None,
+                                );
+
+                                if *is_dashed {
+                                    // Add a site dashed box
+                                    let add_r = D2D_RECT_F {
+                                        left: cx_box,
+                                        top: card_y + 22.0,
+                                        right: cx_box + card_w,
+                                        bottom: card_y + 44.0,
+                                    };
+                                    draw_text(
+                                        &self.render_target,
+                                        "+ Add a site",
+                                        &self.title_format,
+                                        &self.text_secondary_brush,
+                                        &add_r,
+                                    );
+                                } else {
+                                    // Circular Logo
+                                    let logo = D2D1_ELLIPSE {
+                                        point: D2D_POINT_2F {
+                                            x: cx_box + 22.0,
+                                            y: card_y + 33.0,
+                                        },
+                                        radiusX: 11.0,
+                                        radiusY: 11.0,
+                                    };
+                                    let l_brush = if *is_red {
+                                        &self.danger_brush
+                                    } else {
+                                        &self.ok_brush
+                                    };
+                                    self.render_target.FillEllipse(&logo, l_brush);
+
+                                    // White play/music glyph inside logo
+                                    let l_dot = D2D1_ELLIPSE {
+                                        point: D2D_POINT_2F {
+                                            x: cx_box + 22.0,
+                                            y: card_y + 33.0,
+                                        },
+                                        radiusX: 3.5,
+                                        radiusY: 3.5,
+                                    };
+                                    self.render_target
+                                        .FillEllipse(&l_dot, &self.text_primary_brush);
+
+                                    let n_r = D2D_RECT_F {
+                                        left: cx_box + 38.0,
+                                        top: card_y + 18.0,
+                                        right: cx_box + card_w - 4.0,
+                                        bottom: card_y + 34.0,
+                                    };
+                                    draw_text(
+                                        &self.render_target,
+                                        s_name,
+                                        &self.body_format,
+                                        &self.text_primary_brush,
+                                        &n_r,
+                                    );
+
+                                    let u_r = D2D_RECT_F {
+                                        left: cx_box + 38.0,
+                                        top: card_y + 34.0,
+                                        right: cx_box + card_w - 4.0,
+                                        bottom: card_y + 50.0,
+                                    };
+                                    draw_text(
+                                        &self.render_target,
+                                        s_url,
+                                        &self.caption_format,
+                                        &self.text_secondary_brush,
+                                        &u_r,
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    // ── FOOTER HINT (y: params.y + 192.0 to 212.0) ────────────────────────
                     self.render_target.DrawLine(
                         D2D_POINT_2F {
                             x: stage_x + 10.0,
@@ -1114,9 +1778,19 @@ impl NotchRenderer {
                         right: stage_r,
                         bottom: params.y + params.height - 6.0,
                     };
+
+                    let foot_text = match self.active_tab {
+                        0 => "Add a site: any page, signed in, one click away.",
+                        1 => "What the island says lands here. Click one to open it.",
+                        2 => "Drop any file from File Explorer directly onto the notch.",
+                        3 => "Encrypted AES-256 GCM clipboard vault  •  Ctrl+Alt+V",
+                        _ => {
+                            "Press Esc or Ctrl+Alt+N to collapse  •  Right-click tray for settings"
+                        }
+                    };
                     draw_text(
                         &self.render_target,
-                        "Press Esc or Ctrl+Alt+N to collapse  •  Right-click tray for settings",
+                        foot_text,
                         &self.caption_center,
                         &self.text_tertiary_brush,
                         &foot_r,

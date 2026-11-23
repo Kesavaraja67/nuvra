@@ -46,8 +46,9 @@ fn main() {
 
     // 2. Position window centered horizontally at top of primary monitor
     let monitor = get_primary_monitor_bounds();
-    let center_x = monitor.left + (monitor.width() - initial_width as i32) / 2;
-    window.set_geometry(center_x, monitor.top, initial_width, initial_height);
+    let initial_center_x = monitor.left + (monitor.width() as i32) / 2;
+    let initial_x = initial_center_x - (initial_width as i32) / 2;
+    window.set_geometry(initial_x, monitor.top, initial_width, initial_height);
 
     // 3. Initialize D3D11 device and swap chain (falls back to WARP if needed)
     let device_bundle =
@@ -117,8 +118,19 @@ fn main() {
                 WindowEvent::MouseLeave => {
                     engine.set_hovered(false);
                 }
-                WindowEvent::Click { .. } => {
-                    engine.toggle_expand();
+                WindowEvent::Click { x, y } => {
+                    // In expanded view, clicks on top navigation bar switch tabs
+                    if engine.is_expanded() && renderer.handle_click(x as f32, y as f32) {
+                        // Handled by top icon bar!
+                    } else {
+                        engine.toggle_expand();
+                    }
+                }
+                WindowEvent::RightClick { .. } => {
+                    // Right click handled for drag repositioning
+                }
+                WindowEvent::Moved { .. } => {
+                    // Position updated in real-time inside NotchWindow
                 }
                 WindowEvent::HotKey { id } => {
                     if id == 2 {
@@ -129,13 +141,11 @@ fn main() {
                 }
                 WindowEvent::DpiChanged { new_dpi: _ } => {
                     let m = get_primary_monitor_bounds();
-                    let x = m.left + (m.width() - initial_width as i32) / 2;
-                    window.set_geometry(x, m.top, initial_width, initial_height);
+                    window.set_user_center_x(m.left + (m.width() as i32) / 2);
                 }
                 WindowEvent::DisplayChanged => {
                     let m = get_primary_monitor_bounds();
-                    let x = m.left + (m.width() - initial_width as i32) / 2;
-                    window.set_geometry(x, m.top, initial_width, initial_height);
+                    window.set_user_center_x(m.left + (m.width() as i32) / 2);
                 }
             }
         }
@@ -153,16 +163,22 @@ fn main() {
 
         let frame = engine.update(&active_module_state, dt);
 
-        // Update interactive hit bounds matching current spring pill width/height
-        let hit_x = ((initial_width as f32 - frame.width) / 2.0) as i32;
-        window.update_hit_bounds(hit_x, 0, frame.width as u32, (frame.height as u32).max(34));
+        // Position and shape physical window to EXACT pill bounds
+        // This eliminates the rectangular desktop shadow/box and confines Acrylic blur to the rounded pill
+        let user_center_x = window.user_center_x();
+        let pill_width = (frame.width as u32).max(160);
+        let pill_height = (frame.height as u32).max(34);
+        let pill_x = user_center_x - (pill_width as i32) / 2;
+        let pill_y = monitor.top;
 
-        // Render current pill frame with Direct2D and present to DXGI swapchain
+        window.set_pill_bounds(pill_x, pill_y, pill_width, pill_height, frame.radius);
+
+        // Render current pill frame with Direct2D onto the matching window target
         let params = PillRenderParams {
-            x: hit_x as f32,
+            x: 0.0,
             y: 0.0,
-            width: frame.width,
-            height: frame.height,
+            width: pill_width as f32,
+            height: pill_height as f32,
             radius: frame.radius,
             surface_color: frame.colors.surface,
             edge_color: frame.colors.edge,
@@ -174,7 +190,7 @@ fn main() {
             surface_high: frame.colors.surface_high,
             danger: frame.colors.danger,
             ok: frame.colors.ok,
-            alpha: 0.88, // Translucent dark smoked glass (OPEN-004)
+            alpha: 0.35, // Pure translucent frosted glass
         };
         let _ = renderer.render_and_present(&device_bundle.swapchain, &params);
 
