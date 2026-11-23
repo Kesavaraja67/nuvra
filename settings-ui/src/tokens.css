@@ -41,7 +41,6 @@
 }
 
 /* ── Signal theme (high contrast — always free, honoring Windows HCM) ─────── */
-@media (forced-colors: active),
 [data-theme="signal"] {
   --surface:         #000000;
   --surface-raised:  #0A0A0A;
@@ -55,6 +54,23 @@
   --danger:          #FF6B6B;
   --ok:              #7CFF9E;
   --warning:         #FFD400;
+}
+
+@media (forced-colors: active) {
+  :root {
+    --surface:         #000000;
+    --surface-raised:  #0A0A0A;
+    --surface-high:    #141414;
+    --edge:            #FFFFFF;
+    --edge-lit:        rgba(255, 255, 255, 1.00);
+    --text-primary:    #FFFFFF;
+    --text-secondary:  #E0E0E0;
+    --text-tertiary:   #BDBDBD;
+    --accent:          #FFD400;
+    --danger:          #FF6B6B;
+    --ok:              #7CFF9E;
+    --warning:         #FFD400;
+  }
 }
 
 /* ── Pro themes (entitlement-gated — applied via data-theme attribute) ──────── */

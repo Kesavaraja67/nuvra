@@ -61,16 +61,11 @@ pub fn create_device_and_swapchain(
     let mut context: Option<ID3D11DeviceContext> = None;
     let mut swapchain: Option<IDXGISwapChain> = None;
 
-    // Try hardware first; fall back to WARP on failure.
-    let result = try_create_device(
-        D3D_DRIVER_TYPE_HARDWARE,
-        &desc,
-        &mut device,
-        &mut context,
-        &mut swapchain,
-    );
+    let force_warp = std::env::var("NUVRA_FORCE_WARP")
+        .map(|v| v == "1")
+        .unwrap_or(false);
 
-    if result.is_err() {
+    if force_warp {
         try_create_device(
             windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
             &desc,
@@ -78,7 +73,29 @@ pub fn create_device_and_swapchain(
             &mut context,
             &mut swapchain,
         )
-        .map_err(|e| DxgiError::CreateDevice(format!("WARP fallback failed: {e:?}")))?;
+        .map_err(|e| DxgiError::CreateDevice(format!("Forced WARP creation failed: {e:?}")))?;
+        tracing::info!("WARP adapter active");
+    } else {
+        // Try hardware first; fall back to WARP on failure.
+        let result = try_create_device(
+            D3D_DRIVER_TYPE_HARDWARE,
+            &desc,
+            &mut device,
+            &mut context,
+            &mut swapchain,
+        );
+
+        if result.is_err() {
+            try_create_device(
+                windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
+                &desc,
+                &mut device,
+                &mut context,
+                &mut swapchain,
+            )
+            .map_err(|e| DxgiError::CreateDevice(format!("WARP fallback failed: {e:?}")))?;
+            tracing::info!("WARP adapter active");
+        }
     }
 
     Ok(DeviceBundle {

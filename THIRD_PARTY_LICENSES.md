@@ -29,7 +29,7 @@ This file is updated with every dependency added. It is required by D-ARC-01.
 | fluent-bundle | Apache-2.0 | 0.15 |
 | unic-langid | MIT OR Apache-2.0 | 0.9 |
 | rustfft | MIT OR Apache-2.0 | 6 |
-| nucleo | MIT | 0.5 |
+| nucleo | MPL-2.0 | 0.5 |
 | quinn | MIT OR Apache-2.0 | 0.11 |
 | rustls | MIT OR Apache-2.0 | 0.23 |
 | rcgen | MIT OR Apache-2.0 | 0.13 |

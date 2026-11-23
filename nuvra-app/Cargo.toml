@@ -11,14 +11,14 @@ name = "Nuvra"
 path = "src/main.rs"
 
 [dependencies]
-nuvra-render       = { path = "../nuvra-render" }
-nuvra-platform-win = { path = "../nuvra-platform-win" }
-nuvra-core-shared  = { path = "../nuvra-core-shared" }
-nuvra-mod-media    = { path = "../nuvra-mod-media" }
-nuvra-mod-mic      = { path = "../nuvra-mod-mic" }
-nuvra-mod-notifications = { path = "../nuvra-mod-notifications" }
-nuvra-mod-shelf    = { path = "../nuvra-mod-shelf" }
-nuvra-mod-clipboard = { path = "../nuvra-mod-clipboard" }
+nuvra-render       = { path = "../nuvra-render", version = "0.0.1-dev" }
+nuvra-platform-win = { path = "../nuvra-platform-win", version = "0.0.1-dev" }
+nuvra-core-shared  = { path = "../nuvra-core-shared", version = "0.0.1-dev" }
+nuvra-mod-media    = { path = "../nuvra-mod-media", version = "0.0.1-dev" }
+nuvra-mod-mic      = { path = "../nuvra-mod-mic", version = "0.0.1-dev" }
+nuvra-mod-notifications = { path = "../nuvra-mod-notifications", version = "0.0.1-dev" }
+nuvra-mod-shelf    = { path = "../nuvra-mod-shelf", version = "0.0.1-dev" }
+nuvra-mod-clipboard = { path = "../nuvra-mod-clipboard", version = "0.0.1-dev" }
 
 windows.workspace     = true
 tokio.workspace       = true

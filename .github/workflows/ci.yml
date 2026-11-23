@@ -17,9 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust 1.99.0
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.0
           components: clippy, rustfmt
 
       - name: Cache cargo registry
@@ -35,7 +36,7 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy (zero warnings)
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@cargo-nextest
@@ -44,13 +45,13 @@ jobs:
         run: cargo nextest run --workspace
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        uses: taiki-e/install-action@cargo-audit
 
       - name: Security audit
         run: cargo audit
 
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+        uses: taiki-e/install-action@cargo-deny
 
       - name: Dependency policy
         run: cargo deny check

@@ -7,16 +7,5 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-nuvra-core-shared  = { path = "../nuvra-core-shared" }
-nuvra-platform-win = { path = "../nuvra-platform-win" }
-
-windows.workspace   = true
-tokio.workspace     = true
-tracing.workspace   = true
-thiserror.workspace = true
-flume.workspace     = true
-arc-swap.workspace  = true
-serde.workspace     = true
-aes-gcm.workspace   = true
-zeroize.workspace   = true
-rusqlite.workspace  = true
+nuvra-core-shared = { path = "../nuvra-core-shared", version = "0.0.1-dev" }
+flume.workspace   = true

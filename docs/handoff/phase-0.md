@@ -309,7 +309,7 @@ These values cannot be provided by the agent. They must be supplied by the owner
 5. **Run `cargo deny check && cargo audit`** — confirm 0 issues.
 6. **Run the manual test script** — `docs/owner-test-scripts/phase-0-test-script.md` §4–§10.
 7. **Create brand assets** (or commission them) — `docs/BRAND.md` asset checklist.
-8. **Initialize git** — `git init && git checkout -b release/phase-0 && git add -A && git commit -m "feat(phase-0): initial scaffold"`.
+8. **Push git branches** — `git push -u origin main` (sets default branch on GitHub) and `git push -u origin release/phase-0` (pushes Phase 0 release branch).
 9. **Record your test results** in `docs/owner-test-scripts/phase-0-results.md`.
 
 ---

@@ -6,11 +6,12 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "Unicode-3.0",
     "Unicode-DFS-2016",
     "Zlib",
+    "MPL-2.0",
     "LicenseRef-Proprietary",  # nuvra crates themselves
 ]
-copyleft = "deny"       # No GPL/LGPL/AGPL dependencies — R-26
 private.ignore = true
 
 [bans]

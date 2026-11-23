@@ -32,11 +32,11 @@ cargo fmt --check && cargo clippy -- -D warnings && cargo nextest run --workspac
 | Idle CPU | ≈ 0% |
 | Cold start | ≤ 400 ms |
 
-Benchmarks run via `cargo bench`. ETW-based frame timing available via `tools/etw_timing.ps1` (UNVERIFIED — requires owner to run on Floor machine).
+Benchmarks run via `cargo bench`. ETW-based frame timing script `tools/etw_timing.ps1` is not yet available (planned for release benchmarking; UNVERIFIED until available and run by owner on Floor machine).
 
 ## Compatibility Matrix (D-GLB-10 — Phase 0)
 
-Items marked UNVERIFIED require manual testing by the owner using the scripts in `docs/handoff/phase-0.md §9`.
+Items marked UNVERIFIED require manual testing by the owner using the scripts in `docs/owner-test-scripts/phase-0-test-script.md`.
 
 | Test | Status |
 |---|---|

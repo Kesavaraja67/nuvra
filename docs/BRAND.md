@@ -85,7 +85,7 @@ Gap marker: 1 px gap centered at the bridge midpoint (12,12) — no fill, no str
 
 Applies to every surface (notch, settings, marketing site, Android app):
 
-- Purple or blue as primary/accent color.
+- Purple or blue as primary/accent color. *(Note: The Pro theme "Ink Blue" uses accent #7FA3FF per locked Section 6.2 and D-BIZ-03; this is recorded in `docs/decisions/OPEN-001.md` pending owner resolution and does not prohibit Ink Blue theme usage).*
 - Any gradient in the brand palette.
 - Glassmorphism / backdrop blur as a brand element.
 - Rounded cards as the dominant layout pattern.

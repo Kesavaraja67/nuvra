@@ -6,7 +6,7 @@
 
 | Data | Location | Encryption | Retention | How to wipe |
 |---|---|---|---|---|
-| Clipboard history | `%LOCALAPPDATA%\Nuvra\data.db` | AES-256-GCM, DPAPI-sealed key | 7 days max (D-DAT-02) | Settings → Privacy → Wipe clipboard |
+| Clipboard history | `%LOCALAPPDATA%\Nuvra\data.db` | AES-256-GCM, DPAPI-sealed key | 7 days default (configurable 1–30 days, D-DAT-02) | Settings → Privacy → Wipe clipboard |
 | File shelf references | `%LOCALAPPDATA%\Nuvra\data.db` | AES-256-GCM, DPAPI-sealed key | Until removed | Settings → Shelf → Clear all |
 | App configuration | `%APPDATA%\Nuvra\config.toml` | None (no sensitive data) | Until uninstall | Uninstall removes unless user opts to keep |
 | Crash minidumps | `%LOCALAPPDATA%\Nuvra\crashes` | None | Last 3 crashes | Settings → About → Clear crash reports |
@@ -22,7 +22,7 @@
 
 ## User Rights (D-GLB-09)
 Users can at any time:
-- **Export** all stored data: Settings → Privacy → Export data (content-free JSON).
+- **Export** all stored data: Settings → Privacy → Export data (includes clipboard history, shelf, settings, notes per D-GLB-09; JSON format). Diagnostics and performance self-test outputs remain content-free per D-SEC-03 and D-PERF-09.
 - **Delete** all stored data: Settings → Privacy → Wipe all data.
 - **Uninstall:** removes `%LOCALAPPDATA%\Nuvra` and `%APPDATA%\Nuvra` unless the user opts to keep data.
 

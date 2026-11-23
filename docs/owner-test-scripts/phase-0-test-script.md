@@ -85,10 +85,11 @@ cargo audit
 
 > Tests `nuvra-platform-win/src/dpapi.rs`. Run on a real Windows user session (not SYSTEM).
 
-**Manual test — no automated harness in Phase 0:**
+### 4.1 OS API Precheck (.NET ProtectedData)
+
+Validate that DPAPI is operational in the current user session:
 
 ```powershell
-# Write a quick one-off test binary or use PowerShell's DPAPI wrapper:
 Add-Type -AssemblyName System.Security
 $plaintext = [System.Text.Encoding]::UTF8.GetBytes("nuvra-test-key-32-bytes-padding!!")
 $scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser
@@ -99,9 +100,15 @@ $decrypted = [System.Security.Cryptography.ProtectedData]::Unprotect($encrypted,
 
 **Expected output:** `nuvra-test-key-32-bytes-padding!!`
 
-**What this validates:** DPAPI is available in this user session. The Rust `seal_key`/`unseal_key` functions in `dpapi.rs` wrap the same Win32 API (`CryptProtectData` / `CryptUnprotectData`). If the PowerShell test passes, the Win32 API surface is functional.
+### 4.2 Rust Wrapper Verification
 
-**Record:** output of the last line.
+Validate that `nuvra_platform_win::dpapi::seal_key` and `unseal_key` roundtrip successfully and zeroize memory:
+
+```powershell
+cargo test -p nuvra-platform-win -- --nocapture
+```
+
+**Record:** output and pass status (UNVERIFIED until run by owner).
 
 ---
 
@@ -109,7 +116,7 @@ $decrypted = [System.Security.Cryptography.ProtectedData]::Unprotect($encrypted,
 
 > Tests `nuvra-platform-win/src/hotkey.rs`. Requires a visible desktop session.
 
-**Manual test:**
+### 5.1 OS API Precheck (C# P/Invoke)
 
 ```powershell
 # Register Ctrl+Shift+N using native RegisterHotKey via a quick C# snippet:
@@ -130,9 +137,16 @@ public class HotKeyTest {
 ```
 
 **Expected:** `True`
-**If `False`:** check whether Ctrl+Shift+N is already registered by another app. Try a different key.
 
-**Record:** `True` or `False`, and which app holds the conflict if False.
+### 5.2 Rust Wrapper Verification
+
+Validate that `nuvra_platform_win::hotkey::HotKeyRegistration` registers and unregisters cleanly via RAII:
+
+```powershell
+cargo test -p nuvra-platform-win hotkey -- --nocapture
+```
+
+**Record:** `True` or `False`.
 
 ---
 
@@ -157,8 +171,7 @@ $env:NUVRA_FORCE_WARP = "1"
 cargo run -p nuvra-app 2>&1
 ```
 
-**Expected:** the app starts and the spike log says `WARP adapter active`.
-(In Phase 0 `run_spike()` returns an Err immediately — that is correct. The goal is that the binary runs without panicking.)
+**Expected:** the app starts, detects `NUVRA_FORCE_WARP=1`, selects WARP directly, and logs `WARP adapter active`. Exits cleanly (exit code 0).
 
 ### 6.3 Hardware run
 
@@ -236,7 +249,7 @@ Inspect the installed app files and running process:
 | No network calls | Run with Wireshark or Windows Firewall logs | Zero outbound connections (Phase 0 binary makes none) |
 | No clipboard content in logs | Run app, copy sensitive text, check log file | No clipboard text in any log line (R-20) |
 | Registry scope | Search `HKCU\Software\Nuvra` | Exists only under HKCU, not HKLM (R-24) |
-| Binary size | `(Get-Item .\target\release\nuvra-app.exe).Length / 1MB` | Record the value (baseline for v1 comparison) |
+| Binary size | Run `cargo build --release -p nuvra-app` then measure `(Get-Item .\target\release\Nuvra.exe).Length / 1MB` | Record the value (baseline for v1 comparison) |
 
 ---
 

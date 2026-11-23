@@ -102,4 +102,4 @@ Uninstall removes `%LOCALAPPDATA%\Nuvra` and `%APPDATA%\Nuvra` (unless user opts
 - Code-signing certificate
 - Microsoft Store developer account
 - Update manifest URL and signing key
-- See `docs/handoff/phase-0.md` Section 11 for full list.
+- See `docs/handoff/phase-0.md` Section 9 for full list.

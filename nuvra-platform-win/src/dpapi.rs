@@ -106,8 +106,10 @@ pub fn unseal_key(ciphertext: &[u8]) -> Result<Vec<u8>, SealError> {
     let plaintext =
         unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize).to_vec() };
 
-    // SAFETY: LocalFree on DPAPI-allocated pointer.
+    // SAFETY: Zeroize decrypted memory buffer before freeing to protect plaintext key.
+    // LocalFree on DPAPI-allocated pointer.
     unsafe {
+        std::ptr::write_bytes(data_out.pbData, 0, data_out.cbData as usize);
         let _ = LocalFree(HLOCAL(data_out.pbData as *mut _));
     }
 
