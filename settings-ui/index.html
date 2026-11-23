@@ -8,11 +8,19 @@
   <link rel="stylesheet" href="src/style.css">
 </head>
 <body data-theme="obsidian">
+  <!-- Liquid Background Animated Blobs (kmp-glassmorphism-ui) -->
+  <div class="liquid-bg" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
   <div class="settings-container">
     <nav class="settings-sidebar">
       <div class="brand-header">
-        <span class="brand-logo">■</span>
+        <div class="brand-gem"></div>
         <span class="brand-title">Nuvra</span>
+        <span class="brand-badge">CORE</span>
       </div>
       <ul class="nav-list">
         <li class="nav-item active" data-tab="general">General</li>
@@ -31,17 +39,20 @@
         <div class="setting-row">
           <div>
             <label class="setting-title">Launch at Windows startup</label>
-            <div class="setting-desc">Automatically start Nuvra when you sign in</div>
+            <div class="setting-desc">Automatically initialize Nuvra when signing in to Windows</div>
           </div>
-          <input type="checkbox" id="toggle-startup" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-startup" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Primary Display</label>
-            <div class="setting-desc">Display where the notch is anchored</div>
+            <label class="setting-title">Primary Display Anchor</label>
+            <div class="setting-desc">Monitor where the topmost notch is docked</div>
           </div>
-          <select id="select-monitor">
-            <option value="primary">Primary Display (Auto)</option>
+          <select id="select-monitor" class="glass-select">
+            <option value="primary">Primary Display (Auto-detect)</option>
             <option value="display1">Display 1 (1920×1080)</option>
           </select>
         </div>
@@ -49,81 +60,99 @@
 
       <!-- Appearance Tab -->
       <section id="tab-appearance" class="tab-panel">
-        <h2>Appearance</h2>
+        <h2>Appearance & Glass Surface</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Theme</label>
-            <div class="setting-desc">Visual color scheme for the notch and settings</div>
+            <label class="setting-title">Color Theme</label>
+            <div class="setting-desc">Acoustic glassmorphic styling for notch and controls</div>
           </div>
-          <select id="select-theme">
-            <option value="obsidian" selected>Obsidian (Dark)</option>
-            <option value="paper">Paper (Light)</option>
-            <option value="signal">Signal (High Contrast)</option>
+          <select id="select-theme" class="glass-select">
+            <option value="obsidian" selected>Obsidian Glass (Dark)</option>
+            <option value="paper">Paper Glass (Light)</option>
+            <option value="signal">Signal (High Contrast AA)</option>
           </select>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Follow Windows Theme</label>
-            <div class="setting-desc">Switch between Obsidian and Paper automatically</div>
+            <label class="setting-title">Follow System Theme</label>
+            <div class="setting-desc">Harmonize between dark and light glass with Windows personalization</div>
           </div>
-          <input type="checkbox" id="toggle-follow-theme">
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-follow-theme">
+            <span class="glass-slider"></span>
+          </label>
         </div>
       </section>
 
       <!-- Modules Tab -->
       <section id="tab-modules" class="tab-panel">
-        <h2>Modules</h2>
+        <h2>Active Modules</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Media Controls</label>
-            <div class="setting-desc">Show playing audio, album art, and visualizer</div>
+            <label class="setting-title">Media Controller & Visualizer</label>
+            <div class="setting-desc">Hardware GSMTC sessions, album art, and 6-band graphic equalizer</div>
           </div>
-          <input type="checkbox" id="toggle-media" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-media" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Microphone & Call Monitor</label>
-            <div class="setting-desc">Active call detection and global mic mute indicator</div>
+            <label class="setting-title">Microphone Hardware Dispatcher</label>
+            <div class="setting-desc">Active call detection, default capture endpoint monitoring, global mute</div>
           </div>
-          <input type="checkbox" id="toggle-mic" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-mic" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
         <div class="setting-row">
           <div>
             <label class="setting-title">Notification Banners</label>
-            <div class="setting-desc">Compact notch toasts with Focus Assist support</div>
+            <div class="setting-desc">Compact notch toasts honoring Focus Assist / Do Not Disturb</div>
           </div>
-          <input type="checkbox" id="toggle-notifications" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-notifications" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">File Shelf</label>
-            <div class="setting-desc">Drag and drop file staging area</div>
+            <label class="setting-title">Files Staging Shelf</label>
+            <div class="setting-desc">Interactive drag-and-drop file staging area on the notch bezel</div>
           </div>
-          <input type="checkbox" id="toggle-shelf" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-shelf" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Clipboard Manager</label>
-            <div class="setting-desc">Encrypted history with instant fuzzy search</div>
+            <label class="setting-title">Encrypted Clipboard Memory</label>
+            <div class="setting-desc">Hardware DPAPI AES-256-GCM encrypted history with instant search</div>
           </div>
-          <input type="checkbox" id="toggle-clipboard" checked>
+          <label class="glass-switch">
+            <input type="checkbox" id="toggle-clipboard" checked>
+            <span class="glass-slider"></span>
+          </label>
         </div>
       </section>
 
       <!-- Hotkeys Tab -->
       <section id="tab-hotkeys" class="tab-panel">
-        <h2>Hotkeys</h2>
+        <h2>Global Hotkeys</h2>
         <div class="setting-row">
           <div>
             <label class="setting-title">Toggle Notch Expand</label>
-            <div class="setting-desc">Expand or collapse the notch from any app</div>
+            <div class="setting-desc">Expand or collapse the notch from any active desktop application</div>
           </div>
-          <span class="hotkey-badge">Alt + N</span>
+          <span class="hotkey-badge">Ctrl + Alt + N</span>
         </div>
         <div class="setting-row">
           <div>
             <label class="setting-title">Global Microphone Mute</label>
-            <div class="setting-desc">Mute default capture device system-wide</div>
+            <div class="setting-desc">Mute default system capture device globally across all processes</div>
           </div>
           <span class="hotkey-badge">Ctrl + Alt + M</span>
         </div>
@@ -131,20 +160,20 @@
 
       <!-- Privacy Tab -->
       <section id="tab-privacy" class="tab-panel">
-        <h2>Privacy</h2>
+        <h2>Security & Privacy (R-19, R-20)</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Zero Telemetry</label>
-            <div class="setting-desc">Nuvra never transmits data to any external server</div>
+            <label class="setting-title">Zero Telemetry Architecture</label>
+            <div class="setting-desc">Nuvra never transmits telemetry, metrics, or personal data to any external network</div>
           </div>
-          <span class="status-badge ok">Active</span>
+          <span class="status-badge ok">Enforced (0 calls)</span>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Password Managers Excluded</label>
-            <div class="setting-desc">1Password, Bitwarden, KeePass are never captured</div>
+            <label class="setting-title">Password Manager Exclusions</label>
+            <div class="setting-desc">1Password, Bitwarden, KeePass are hardware-denied from clipboard capture</div>
           </div>
-          <span class="status-badge ok">10 Protected</span>
+          <span class="status-badge ok">Active Protection</span>
         </div>
       </section>
 
@@ -153,16 +182,17 @@
         <h2>About Nuvra</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Version</label>
-            <div class="setting-desc">v1.0.0 (Windows x64)</div>
+            <label class="setting-title">Platform Architecture</label>
+            <div class="setting-desc">DirectComposition + Direct2D Hardware Acceleration • Rust 1.99</div>
           </div>
-          <span class="version-tag">Core v1</span>
+          <span class="version-tag">Core v1.0.0</span>
         </div>
         <div class="setting-row">
           <div>
-            <label class="setting-title">Architecture</label>
-            <div class="setting-desc">Rust 1.99 + DirectComposition + D3D11</div>
+            <label class="setting-title">Compositor Engine</label>
+            <div class="setting-desc">Pre-multiplied DXGI Composition with 120 FPS target on Floor hardware</div>
           </div>
+          <span class="status-badge ok">Hardware Active</span>
         </div>
       </section>
     </main>
