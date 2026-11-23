@@ -167,6 +167,14 @@ fn main() {
             surface_color: frame.colors.surface,
             edge_color: frame.colors.edge,
             text_color: frame.colors.text_primary,
+            text_secondary: frame.colors.text_secondary,
+            text_tertiary: frame.colors.text_tertiary,
+            accent_color: frame.colors.accent,
+            surface_raised: frame.colors.surface_raised,
+            surface_high: frame.colors.surface_high,
+            danger: frame.colors.danger,
+            ok: frame.colors.ok,
+            alpha: 0.88, // Translucent dark smoked glass (OPEN-004)
         };
         let _ = renderer.render_and_present(&device_bundle.swapchain, &params);
 
