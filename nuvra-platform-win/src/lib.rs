@@ -9,4 +9,5 @@ pub mod dpapi;
 pub mod dxgi;
 pub mod hotkey;
 pub mod monitor;
+pub mod tray;
 pub mod window;

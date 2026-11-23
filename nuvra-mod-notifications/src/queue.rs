@@ -12,18 +12,10 @@ pub struct NotificationItem {
     pub summary: String,
 }
 
+#[derive(Default)]
 pub struct NotificationFilter {
     pub blocked_apps: HashSet<String>,
     pub dnd_active: bool,
-}
-
-impl Default for NotificationFilter {
-    fn default() -> Self {
-        Self {
-            blocked_apps: HashSet::new(),
-            dnd_active: false,
-        }
-    }
 }
 
 pub struct NotificationQueue {

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuvra Settings</title>
+  <link rel="stylesheet" href="src/tokens.css">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body data-theme="obsidian">
+  <div class="settings-container">
+    <nav class="settings-sidebar">
+      <div class="brand-header">
+        <span class="brand-logo">■</span>
+        <span class="brand-title">Nuvra</span>
+      </div>
+      <ul class="nav-list">
+        <li class="nav-item active" data-tab="general">General</li>
+        <li class="nav-item" data-tab="appearance">Appearance</li>
+        <li class="nav-item" data-tab="modules">Modules</li>
+        <li class="nav-item" data-tab="hotkeys">Hotkeys</li>
+        <li class="nav-item" data-tab="privacy">Privacy</li>
+        <li class="nav-item" data-tab="about">About</li>
+      </ul>
+    </nav>
+
+    <main class="settings-content">
+      <!-- General Tab -->
+      <section id="tab-general" class="tab-panel active">
+        <h2>General</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Launch at Windows startup</label>
+            <div class="setting-desc">Automatically start Nuvra when you sign in</div>
+          </div>
+          <input type="checkbox" id="toggle-startup" checked>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Primary Display</label>
+            <div class="setting-desc">Display where the notch is anchored</div>
+          </div>
+          <select id="select-monitor">
+            <option value="primary">Primary Display (Auto)</option>
+            <option value="display1">Display 1 (1920×1080)</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Appearance Tab -->
+      <section id="tab-appearance" class="tab-panel">
+        <h2>Appearance</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Theme</label>
+            <div class="setting-desc">Visual color scheme for the notch and settings</div>
+          </div>
+          <select id="select-theme">
+            <option value="obsidian" selected>Obsidian (Dark)</option>
+            <option value="paper">Paper (Light)</option>
+            <option value="signal">Signal (High Contrast)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Follow Windows Theme</label>
+            <div class="setting-desc">Switch between Obsidian and Paper automatically</div>
+          </div>
+          <input type="checkbox" id="toggle-follow-theme">
+        </div>
+      </section>
+
+      <!-- Modules Tab -->
+      <section id="tab-modules" class="tab-panel">
+        <h2>Modules</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Media Controls</label>
+            <div class="setting-desc">Show playing audio, album art, and visualizer</div>
+          </div>
+          <input type="checkbox" id="toggle-media" checked>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Microphone & Call Monitor</label>
+            <div class="setting-desc">Active call detection and global mic mute indicator</div>
+          </div>
+          <input type="checkbox" id="toggle-mic" checked>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Notification Banners</label>
+            <div class="setting-desc">Compact notch toasts with Focus Assist support</div>
+          </div>
+          <input type="checkbox" id="toggle-notifications" checked>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">File Shelf</label>
+            <div class="setting-desc">Drag and drop file staging area</div>
+          </div>
+          <input type="checkbox" id="toggle-shelf" checked>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Clipboard Manager</label>
+            <div class="setting-desc">Encrypted history with instant fuzzy search</div>
+          </div>
+          <input type="checkbox" id="toggle-clipboard" checked>
+        </div>
+      </section>
+
+      <!-- Hotkeys Tab -->
+      <section id="tab-hotkeys" class="tab-panel">
+        <h2>Hotkeys</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Toggle Notch Expand</label>
+            <div class="setting-desc">Expand or collapse the notch from any app</div>
+          </div>
+          <span class="hotkey-badge">Alt + N</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Global Microphone Mute</label>
+            <div class="setting-desc">Mute default capture device system-wide</div>
+          </div>
+          <span class="hotkey-badge">Ctrl + Alt + M</span>
+        </div>
+      </section>
+
+      <!-- Privacy Tab -->
+      <section id="tab-privacy" class="tab-panel">
+        <h2>Privacy</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Zero Telemetry</label>
+            <div class="setting-desc">Nuvra never transmits data to any external server</div>
+          </div>
+          <span class="status-badge ok">Active</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Password Managers Excluded</label>
+            <div class="setting-desc">1Password, Bitwarden, KeePass are never captured</div>
+          </div>
+          <span class="status-badge ok">10 Protected</span>
+        </div>
+      </section>
+
+      <!-- About Tab -->
+      <section id="tab-about" class="tab-panel">
+        <h2>About Nuvra</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Version</label>
+            <div class="setting-desc">v1.0.0 (Windows x64)</div>
+          </div>
+          <span class="version-tag">Core v1</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title">Architecture</label>
+            <div class="setting-desc">Rust 1.99 + DirectComposition + D3D11</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="src/app.js"></script>
+</body>
+</html>

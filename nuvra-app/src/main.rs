@@ -7,6 +7,7 @@ use nuvra_core_shared::module::ModuleState;
 use nuvra_platform_win::dcomp::CompositionHost;
 use nuvra_platform_win::dxgi::create_device_and_swapchain;
 use nuvra_platform_win::monitor::{get_primary_monitor_bounds, is_foreground_fullscreen};
+use nuvra_platform_win::tray::TrayIcon;
 use nuvra_platform_win::window::{NotchWindow, WindowEvent};
 use nuvra_render::engine::{NotchEngine, Theme};
 use nuvra_render::tokens;
@@ -64,7 +65,10 @@ fn main() {
         }
     };
 
-    // 5. Initialize Notch Engine
+    // 5. Initialize System Tray Icon
+    let _tray = TrayIcon::new(window.hwnd()).ok();
+
+    // 6. Initialize Notch Engine
     let mut engine = NotchEngine::new(Theme::Obsidian);
     let mut last_frame_time = Instant::now();
     let event_rx = window.event_receiver().clone();
