@@ -142,8 +142,8 @@ fn main() {
 
         // Fullscreen auto-hide check (D-WIN-07)
         let is_fullscreen = is_foreground_fullscreen();
-        if is_fullscreen {
-            // Auto-collapse when user is in fullscreen game/video
+        if is_fullscreen && !engine.is_pinned() {
+            // Auto-collapse when user is in fullscreen game/video and not pinned
             engine.set_hovered(false);
         }
 
@@ -155,7 +155,7 @@ fn main() {
 
         // Update interactive hit bounds matching current spring pill width/height
         let hit_x = ((initial_width as f32 - frame.width) / 2.0) as i32;
-        window.update_hit_bounds(hit_x, 0, frame.width as u32, frame.height as u32);
+        window.update_hit_bounds(hit_x, 0, frame.width as u32, (frame.height as u32).max(34));
 
         // Render current pill frame with Direct2D and present to DXGI swapchain
         let params = PillRenderParams {
@@ -166,6 +166,7 @@ fn main() {
             radius: frame.radius,
             surface_color: frame.colors.surface,
             edge_color: frame.colors.edge,
+            text_color: frame.colors.text_primary,
         };
         let _ = renderer.render_and_present(&device_bundle.swapchain, &params);
 

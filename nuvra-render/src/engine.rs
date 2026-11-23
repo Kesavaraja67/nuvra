@@ -96,6 +96,7 @@ pub struct NotchEngine {
     animator: NotchGeometryAnimator,
     is_hovered: bool,
     is_pinned: bool,
+    is_expanded: bool,
 }
 
 impl NotchEngine {
@@ -104,7 +105,8 @@ impl NotchEngine {
             theme,
             animator: NotchGeometryAnimator::new(),
             is_hovered: false,
-            is_pinned: false,
+            is_pinned: true, // Default to pinned ambient so notch is visible on launch (D-WIN-07)
+            is_expanded: false,
         }
     }
 
@@ -112,29 +114,42 @@ impl NotchEngine {
         self.theme = theme;
     }
 
+    pub fn set_pinned(&mut self, pinned: bool) {
+        self.is_pinned = pinned;
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        self.is_pinned
+    }
+
     pub fn set_hovered(&mut self, hovered: bool) {
         self.is_hovered = hovered;
     }
 
     pub fn toggle_expand(&mut self) {
-        if self.animator.current_state == NotchState::Expanded {
-            self.animator.set_state(NotchState::Glance);
-        } else {
-            self.animator.set_state(NotchState::Expanded);
-        }
+        self.is_expanded = !self.is_expanded;
+    }
+
+    pub fn set_expanded(&mut self, expanded: bool) {
+        self.is_expanded = expanded;
+    }
+
+    pub fn is_expanded(&self) -> bool {
+        self.is_expanded
     }
 
     /// Advance the simulation and compute the current visual frame.
     pub fn update(&mut self, active_module: &ModuleState, dt: f32) -> FrameDescriptor {
         // Resolve target state based on priority & user interactions
-        if self.is_pinned {
+        if self.is_expanded {
             self.animator.set_state(NotchState::Expanded);
         } else if self.is_hovered {
-            if self.animator.current_state != NotchState::Expanded {
-                self.animator.set_state(NotchState::Glance);
-            }
+            self.animator.set_state(NotchState::Glance);
+        } else if self.is_pinned {
+            // When pinned and not expanded, stay at Ambient visible pill (D-WIN-07)
+            self.animator.set_state(NotchState::Ambient);
         } else {
-            // Unhovered: inspect module state
+            // Unhovered and unpinned: inspect module state
             match active_module {
                 ModuleState::Idle => {
                     self.animator.set_state(NotchState::Idle);
@@ -149,9 +164,7 @@ impl NotchEngine {
                     self.animator.set_state(NotchState::Ambient);
                 }
                 _ => {
-                    if self.animator.current_state != NotchState::Expanded {
-                        self.animator.set_state(NotchState::Idle);
-                    }
+                    self.animator.set_state(NotchState::Idle);
                 }
             }
         }
@@ -183,6 +196,7 @@ mod tests {
     #[test]
     fn test_engine_media_active_state() {
         let mut engine = NotchEngine::new(Theme::Obsidian);
+        engine.set_pinned(false);
         let playing_media = ModuleState::Media(MediaSnapshot {
             is_playing: true,
             title: "Test Track".into(),

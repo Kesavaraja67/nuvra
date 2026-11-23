@@ -7,7 +7,7 @@ use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowRect,
+    GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowRect,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +70,16 @@ pub fn is_foreground_fullscreen() -> bool {
         let shell = GetShellWindow();
         if fg_hwnd == desktop || fg_hwnd == shell {
             return false;
+        }
+
+        // Filter out desktop background (WorkerW, Progman) and Windows taskbars
+        let mut class_name = [0u16; 256];
+        let len = GetClassNameW(fg_hwnd, &mut class_name);
+        if len > 0 {
+            let class_str = String::from_utf16_lossy(&class_name[..len as usize]);
+            if class_str == "WorkerW" || class_str == "Progman" || class_str.starts_with("Shell_") {
+                return false;
+            }
         }
 
         let mut window_rect = RECT::default();
