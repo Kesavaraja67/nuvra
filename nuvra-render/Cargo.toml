@@ -1,0 +1,25 @@
+[package]
+name = "nuvra-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+nuvra-platform-win = { path = "../nuvra-platform-win", version = "0.0.1-dev" }
+nuvra-core-shared  = { path = "../nuvra-core-shared", version = "0.0.1-dev" }
+
+windows.workspace   = true
+tracing.workspace   = true
+thiserror.workspace = true
+parking_lot.workspace = true
+flume.workspace     = true
+arc-swap.workspace  = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name    = "render_perf"
+harness = false

@@ -1,0 +1,36 @@
+[package]
+name = "nuvra-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "Nuvra"
+path = "src/main.rs"
+
+[dependencies]
+nuvra-render       = { path = "../nuvra-render", version = "0.0.1-dev" }
+nuvra-platform-win = { path = "../nuvra-platform-win", version = "0.0.1-dev" }
+nuvra-core-shared  = { path = "../nuvra-core-shared", version = "0.0.1-dev" }
+nuvra-mod-media    = { path = "../nuvra-mod-media", version = "0.0.1-dev" }
+nuvra-mod-mic      = { path = "../nuvra-mod-mic", version = "0.0.1-dev" }
+nuvra-mod-notifications = { path = "../nuvra-mod-notifications", version = "0.0.1-dev" }
+nuvra-mod-shelf    = { path = "../nuvra-mod-shelf", version = "0.0.1-dev" }
+nuvra-mod-clipboard = { path = "../nuvra-mod-clipboard", version = "0.0.1-dev" }
+
+windows.workspace     = true
+tokio.workspace       = true
+tracing.workspace     = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace   = true
+serde.workspace       = true
+toml.workspace        = true
+thiserror.workspace   = true
+anyhow.workspace      = true
+flume.workspace       = true
+arc-swap.workspace    = true
+parking_lot.workspace = true
+fluent-bundle.workspace = true
+unic-langid.workspace   = true

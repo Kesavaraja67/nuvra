@@ -1,0 +1,11 @@
+[package]
+name = "nuvra-mod-clipboard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+nuvra-core-shared = { path = "../nuvra-core-shared", version = "0.0.1-dev" }
+flume.workspace   = true

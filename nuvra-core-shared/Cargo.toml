@@ -1,0 +1,16 @@
+[package]
+name = "nuvra-core-shared"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace       = true
+thiserror.workspace   = true
+flume.workspace       = true
+
+[dev-dependencies]
+proptest.workspace  = true
+criterion.workspace = true
