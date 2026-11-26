@@ -7,10 +7,12 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-serde.workspace       = true
-thiserror.workspace   = true
-flume.workspace       = true
+serde.workspace         = true
+thiserror.workspace     = true
+flume.workspace         = true
+fluent-bundle.workspace = true
+unic-langid.workspace   = true
 
 [dev-dependencies]
 proptest.workspace  = true
-criterion.workspace = true
+# criterion.workspace = true

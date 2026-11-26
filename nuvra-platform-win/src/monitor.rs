@@ -7,7 +7,8 @@ use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowRect,
+    GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW,
+    GetWindowRect, GWL_STYLE, WS_CAPTION, WS_MAXIMIZE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +94,12 @@ pub fn is_foreground_fullscreen() -> bool {
             ..Default::default()
         };
         if !GetMonitorInfoW(hmonitor, &mut info).as_bool() {
+            return false;
+        }
+
+        // True fullscreen check: ignore desktop shells, captioned windows, and standard maximized apps
+        let style = GetWindowLongW(fg_hwnd, GWL_STYLE) as u32;
+        if (style & WS_CAPTION.0) != 0 || (style & WS_MAXIMIZE.0) != 0 {
             return false;
         }
 

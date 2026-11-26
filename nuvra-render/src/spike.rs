@@ -1,41 +1,59 @@
 // nuvra-render/src/spike.rs
-// Phase 0 Renderer Validation Spike — Section 12.6
-//
-// Purpose: validate D-STK-03 (DirectComposition + D3D11 + D2D) and D-PERF-03
-// (compositor-driven spring transitions) on the Floor machine, a WARP-forced
-// run, and the High machine. This file is PHASE 0 SCOPE ONLY and is removed
-// before v1 delivery.
-//
-// R-12: Real verification logic for spring curves and dimension transitions.
+// UI-1 Renderer Validation Spike — Section 13 (Spike C: Closed-form and Cubic Hermite baking)
+// R-12: Real verification logic for closed-form spring physics and cubic segment error.
 // R-13: No unsafe in this crate (#![forbid(unsafe_code)]).
 // D-PERF-03: Spring curves evaluated and verified against target tolerance (error <= 0.5 px).
 
 use crate::tokens;
 
-/// Evaluates an underdamped spring step over a discrete time delta.
-/// Returns (new_position, new_velocity).
-pub fn evaluate_spring(
+/// Closed-form analytical evaluation of an underdamped spring:
+/// Returns (position, velocity) at exact time t (in seconds).
+pub fn evaluate_spring_analytical(
     stiffness: f32,
     damping: f32,
     mass: f32,
-    current_pos: f32,
+    initial_pos: f32,
     target_pos: f32,
-    velocity: f32,
-    dt: f32,
+    initial_vel: f32,
+    t: f32,
 ) -> (f32, f32) {
-    let displacement = current_pos - target_pos;
-    let spring_force = -stiffness * displacement;
-    let damping_force = -damping * velocity;
-    let total_force = spring_force + damping_force;
-    let acceleration = total_force / mass;
+    if t <= 0.0 {
+        return (initial_pos, initial_vel);
+    }
+    let omega_0 = (stiffness / mass).sqrt();
+    let zeta = damping / (2.0 * (stiffness * mass).sqrt());
 
-    let new_velocity = velocity + acceleration * dt;
-    let new_pos = current_pos + new_velocity * dt;
-    (new_pos, new_velocity)
+    if zeta < 1.0 {
+        // Underdamped oscillator
+        let omega_d = omega_0 * (1.0 - zeta * zeta).sqrt();
+        let a = initial_pos - target_pos;
+        let b = (initial_vel + zeta * omega_0 * a) / omega_d;
+        let decay = (-zeta * omega_0 * t).exp();
+        let cos_val = (omega_d * t).cos();
+        let sin_val = (omega_d * t).sin();
+
+        let pos = target_pos + decay * (a * cos_val + b * sin_val);
+        let vel = -zeta * omega_0 * decay * (a * cos_val + b * sin_val)
+            + decay * (-a * omega_d * sin_val + b * omega_d * cos_val);
+        (pos, vel)
+    } else {
+        // Overdamped or critically damped fallback
+        (target_pos, 0.0)
+    }
 }
 
-/// Spike entry point — called from nuvra-app/src/main.rs in Phase 0.
-/// Validates spring transitions and WARP/hardware driver configuration.
+/// Evaluates a cubic Hermite segment at local parameter u in [0, 1].
+pub fn eval_hermite(p0: f32, v0: f32, p1: f32, v1: f32, dt: f32, u: f32) -> f32 {
+    let u2 = u * u;
+    let u3 = u2 * u;
+    let h00 = 2.0 * u3 - 3.0 * u2 + 1.0;
+    let h10 = u3 - 2.0 * u2 + u;
+    let h01 = -2.0 * u3 + 3.0 * u2;
+    let h11 = u3 - u2;
+    h00 * p0 + h10 * (v0 * dt) + h01 * p1 + h11 * (v1 * dt)
+}
+
+/// Spike entry point — validates closed-form dynamics and Hermite cubic baking accuracy (Spike C).
 pub fn run_spike() -> Result<(), String> {
     // 1. Validate environment driver selection
     let force_warp = std::env::var("NUVRA_FORCE_WARP")
@@ -46,65 +64,75 @@ pub fn run_spike() -> Result<(), String> {
         println!("WARP adapter active");
     }
 
-    // 2. Validate spring dynamics: Idle (160) -> Ambient (220) -> Glance (360) -> Expanded (520)
-    let states = [
-        (
-            "Idle",
-            tokens::window::IDLE_WIDTH,
-            tokens::window::IDLE_HEIGHT,
-        ),
-        (
-            "Ambient",
-            tokens::window::AMBIENT_WIDTH,
-            tokens::window::AMBIENT_HEIGHT,
-        ),
-        (
-            "Glance",
-            tokens::window::GLANCE_WIDTH,
-            tokens::window::GLANCE_HEIGHT,
-        ),
-        (
-            "Expanded",
-            tokens::window::EXPANDED_WIDTH,
-            tokens::window::EXPANDED_DEFAULT_HEIGHT,
-        ),
-    ];
+    // 2. Validate Expand spring (380 to 864 px, 484 px displacement)
+    let expand = &tokens::spring::EXPAND;
+    let from_w = 380.0;
+    let to_w = 864.0;
+    let segment_dt = 0.020; // 20 ms segment (<= 24 ms max segment rule)
+    let total_duration = 0.350; // 350 ms
 
-    let expand_spring = &tokens::spring::EXPAND;
-    let dt = 1.0 / 60.0; // 60 Hz frame step
+    let mut t = 0.0;
+    let mut max_err: f32 = 0.0;
 
-    for window_slice in states.windows(2) {
-        let (from_name, from_w, _) = window_slice[0];
-        let (to_name, to_w, _) = window_slice[1];
+    while t < total_duration {
+        let t_next = f32::min(t + segment_dt, total_duration);
+        let dt = t_next - t;
+        if dt <= 0.001 {
+            break;
+        }
 
-        let mut pos = from_w;
-        let mut vel = 0.0;
-        let mut steps = 0;
-        let max_steps = 180; // 3 seconds timeout
+        let (p0, v0) = evaluate_spring_analytical(
+            expand.stiffness,
+            expand.damping,
+            expand.mass,
+            from_w,
+            to_w,
+            0.0,
+            t,
+        );
+        let (p1, v1) = evaluate_spring_analytical(
+            expand.stiffness,
+            expand.damping,
+            expand.mass,
+            from_w,
+            to_w,
+            0.0,
+            t_next,
+        );
 
-        while (pos - to_w).abs() > 0.5 && steps < max_steps {
-            let (new_pos, new_vel) = evaluate_spring(
-                expand_spring.stiffness,
-                expand_spring.damping,
-                expand_spring.mass,
-                pos,
+        // Check error at 1 ms steps inside the segment
+        for step in 0..=20 {
+            let sub_t = t + (step as f32) * 0.001;
+            if sub_t > t_next {
+                break;
+            }
+            let u = (sub_t - t) / dt;
+            let hermite_p = eval_hermite(p0, v0, p1, v1, dt, u);
+            let (analytical_p, _) = evaluate_spring_analytical(
+                expand.stiffness,
+                expand.damping,
+                expand.mass,
+                from_w,
                 to_w,
-                vel,
-                dt,
+                0.0,
+                sub_t,
             );
-            pos = new_pos;
-            vel = new_vel;
-            steps += 1;
+            let err = (hermite_p - analytical_p).abs();
+            if err > max_err {
+                max_err = err;
+            }
         }
 
-        if (pos - to_w).abs() > 0.5 {
-            return Err(format!(
-                "Spring transition from {from_name} to {to_name} failed to converge within tolerance: final pos={pos}, target={to_w}"
-            ));
-        }
+        t = t_next;
     }
 
-    println!("Phase 0 renderer spike: spring curve convergence validated (tolerance <= 0.5px).");
+    if max_err > 0.5 {
+        return Err(format!(
+            "Spike C failure: cubic Hermite error exceeds 0.5px: max error = {max_err:.4}px"
+        ));
+    }
+
+    println!("Spike C passed: Closed-form spring and cubic Hermite fit max error = {max_err:.4}px (<= 0.5px).");
     Ok(())
 }
 
@@ -113,7 +141,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_spring_convergence() {
+    fn test_spring_closed_form_and_baking_error() {
         assert!(run_spike().is_ok());
     }
 }

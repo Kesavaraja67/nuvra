@@ -1,84 +1,71 @@
 /* settings-ui/src/tokens.css
- * CSS custom properties mirroring nuvra-render/src/tokens.rs and kmp-glassmorphism-ui skill.
- * Integrates glassmorphism variables: frosted blur, translucent surfaces, and specular highlights.
+ * CSS custom properties mirroring nuvra-render/src/tokens.rs (UI-1 locked tokens).
+ * Pure solid matte palette — no backdrop blur, no generic gradients.
  */
 
-/* ── Obsidian Glass theme (dark default) ─────────────────────────────────── */
+/* ── Obsidian theme (dark default) ────────────────────────────────────────── */
 :root,
 [data-theme="obsidian"] {
-  --surface:         #07090E;
-  --surface-raised:  #0F121C;
-  --surface-high:    #171B2A;
-  --edge:            rgba(255, 255, 255, 0.10);
-  --edge-lit:        rgba(255, 255, 255, 0.25);
-  --text-primary:    #F8F9FA;
-  --text-secondary:  #A2A8B6;
-  --text-tertiary:   #646A7A;
-  --accent:          #FF6B3D;
-  --accent-secondary:#00E5FF;
-  --accent-purple:   #6C63FF;
+  --surface:         #0C0D12;
+  --surface-raised:  #14161D;
+  --surface-high:    #1C1F28;
+  --edge:            #262A36;
+  --plate-rest:      rgba(255, 255, 255, 0.05);
+  --plate-hover:     rgba(255, 255, 255, 0.10);
+  --plate-active:    rgba(255, 255, 255, 0.16);
+  --divider:         rgba(255, 255, 255, 0.32);
+  --text-primary:    #F4F5F8;
+  --text-secondary:  #A3A8B5;
+  --text-tertiary:   #6F7482;
+  --accent:          #6D3CFB;
+  --accent-hi:       #8A6BFF;
   --danger:          #FF4258;
   --ok:              #46D39A;
   --warning:         #FFC247;
-
-  /* Glassmorphism primitives (kmp-glassmorphism-ui) */
-  --glass-surface:   rgba(14, 18, 28, 0.62);
-  --glass-card:      rgba(255, 255, 255, 0.045);
-  --glass-card-hover:rgba(255, 255, 255, 0.075);
-  --glass-border:    rgba(255, 255, 255, 0.11);
-  --glass-border-hi: rgba(255, 255, 255, 0.22);
-  --glass-blur:      blur(24px) saturate(180%);
-  --glass-shadow:    0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --logo-a:          #6A2CF0;
+  --logo-b:          #9055F8;
 }
 
-/* ── Paper theme (light frosted glass) ───────────────────────────────────── */
+/* ── Paper theme (light solid) ────────────────────────────────────────────── */
 [data-theme="paper"] {
-  --surface:         #F3F4F7;
+  --surface:         #F6F5F2;
   --surface-raised:  #FFFFFF;
-  --surface-high:    #E7E9EE;
-  --edge:            rgba(0, 0, 0, 0.10);
-  --edge-lit:        rgba(255, 255, 255, 0.85);
-  --text-primary:    #111318;
-  --text-secondary:  #525662;
-  --text-tertiary:   #828896;
-  --accent:          #E8501F;
-  --accent-secondary:#00B4D8;
-  --accent-purple:   #5B52E0;
+  --surface-high:    #ECEAE4;
+  --edge:            #DAD8D2;
+  --plate-rest:      rgba(0, 0, 0, 0.05);
+  --plate-hover:     rgba(0, 0, 0, 0.10);
+  --plate-active:    rgba(0, 0, 0, 0.16);
+  --divider:         rgba(0, 0, 0, 0.32);
+  --text-primary:    #14151A;
+  --text-secondary:  #5A5E68;
+  --text-tertiary:   #8A8D96;
+  --accent:          #5B2EE0;
+  --accent-hi:       #754DF0;
   --danger:          #D42A40;
   --ok:              #1E9E6A;
   --warning:         #B87A00;
-
-  --glass-surface:   rgba(255, 255, 255, 0.70);
-  --glass-card:      rgba(255, 255, 255, 0.55);
-  --glass-card-hover:rgba(255, 255, 255, 0.85);
-  --glass-border:    rgba(0, 0, 0, 0.08);
-  --glass-border-hi: rgba(0, 0, 0, 0.15);
-  --glass-blur:      blur(24px) saturate(180%);
-  --glass-shadow:    0 8px 32px 0 rgba(0, 0, 0, 0.08);
+  --logo-a:          #5B2EE0;
+  --logo-b:          #754DF0;
 }
 
-/* ── Signal theme (high contrast — always free) ─────────────────────────── */
+/* ── Signal theme (high contrast — always free) ──────────────────────────── */
 [data-theme="signal"] {
   --surface:         #000000;
   --surface-raised:  #0A0A0A;
   --surface-high:    #141414;
   --edge:            #FFFFFF;
-  --edge-lit:        #FFFFFF;
+  --plate-rest:      transparent;
+  --plate-hover:     transparent;
+  --plate-active:    transparent;
+  --divider:         #FFFFFF;
   --text-primary:    #FFFFFF;
   --text-secondary:  #E0E0E0;
   --text-tertiary:   #BDBDBD;
   --accent:          #FFD400;
-  --accent-secondary:#00E5FF;
-  --accent-purple:   #FFFF00;
+  --accent-hi:       #FFD400;
   --danger:          #FF6B6B;
   --ok:              #7CFF9E;
   --warning:         #FFD400;
-
-  --glass-surface:   #050505;
-  --glass-card:      #101010;
-  --glass-card-hover:#1A1A1A;
-  --glass-border:    #FFFFFF;
-  --glass-border-hi: #FFFFFF;
-  --glass-blur:      none;
-  --glass-shadow:    none;
+  --logo-a:          #FFD400;
+  --logo-b:          #FFD400;
 }

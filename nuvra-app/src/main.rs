@@ -1,15 +1,20 @@
-// Nuvra — main entry point (v1 Core)
-// ADR-0001 (Rust), ADR-0002 (renderer), ADR-0003 (threading/event bus)
+// Nuvra — main entry point (v1 Core UI-1 Glassmorphic Host)
 // R-13: unsafe is ONLY in nuvra-platform-win; this crate is safe.
 #![forbid(unsafe_code)]
 
+mod app_state;
+
+use app_state::{build_live_layout, make_vm, snap_strings, AppData};
 use nuvra_core_shared::module::ModuleState;
+use nuvra_platform_win::clipboard::{init_com_sta, start_file_drag_drop};
 use nuvra_platform_win::dcomp::CompositionHost;
+use nuvra_platform_win::draw::drawers::hit_test_shelf_drag;
+use nuvra_platform_win::draw::{ModularRenderer, RendererAction};
 use nuvra_platform_win::dxgi::create_device_and_swapchain;
 use nuvra_platform_win::hotkey::HotKeyRegistration;
 use nuvra_platform_win::monitor::{get_primary_monitor_bounds, is_foreground_fullscreen};
-use nuvra_platform_win::renderer::{NotchRenderer, PillRenderParams};
-use nuvra_platform_win::tray::TrayIcon;
+use nuvra_platform_win::power::BatteryInfo;
+use nuvra_platform_win::tray::{TrayIcon, TRAY_CMD_QUIT, TRAY_CMD_SETTINGS, TRAY_CMD_TOGGLE_NOTCH};
 use nuvra_platform_win::window::{NotchWindow, WindowEvent};
 use nuvra_render::engine::{NotchEngine, Theme};
 use nuvra_render::tokens;
@@ -17,245 +22,251 @@ use std::time::Instant;
 use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_CONTROL, VK_M, VK_N};
 
 fn main() {
-    tracing::info!("Nuvra v1 Core starting...");
-
-    // Diagnostic spike mode preserved for headless CI/VM verification (R-09)
-    if std::env::var("NUVRA_RUN_SPIKE")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-    {
+    init_com_sta();
+    if std::env::var("NUVRA_RUN_SPIKE").map(|v| v.trim() == "1").unwrap_or(false) {
         if let Err(err) = nuvra_render::spike::run_spike() {
             eprintln!("Verification spike failed: {err}");
             std::process::exit(1);
         }
-        println!("Verification spike passed.");
         return;
     }
 
-    let initial_width = tokens::window::EXPANDED_WIDTH as u32;
-    let initial_height = tokens::window::EXPANDED_MAX_HEIGHT as u32;
-
-    // 1. Create topmost layered click-through Notch window
-    let window = match NotchWindow::new(initial_width, initial_height) {
-        Ok(w) => w,
-        Err(e) => {
-            eprintln!("Failed to initialize Notch window: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    // 2. Position window centered horizontally at top of primary monitor
+    let initial_w = tokens::window::FIXED_WINDOW_WIDTH as u32;
+    let initial_h = tokens::window::FIXED_WINDOW_HEIGHT as u32;
+    let window = NotchWindow::new(initial_w, initial_h).unwrap_or_else(|e| {
+        eprintln!("Failed to initialize Notch window: {e}");
+        std::process::exit(1);
+    });
     let monitor = get_primary_monitor_bounds();
-    let initial_center_x = monitor.left + (monitor.width() as i32) / 2;
-    let initial_x = initial_center_x - (initial_width as i32) / 2;
-    window.set_geometry(initial_x, monitor.top, initial_width, initial_height);
+    let init_x = monitor.left + (monitor.width() / 2) - (initial_w as i32) / 2;
+    window.set_geometry(init_x, monitor.top, initial_w, initial_h);
 
-    // 3. Initialize D3D11 device and swap chain (falls back to WARP if needed)
-    let device_bundle =
-        match create_device_and_swapchain(window.hwnd(), initial_width, initial_height) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("Failed to initialize D3D11 / DXGI device: {e}");
-                std::process::exit(1);
-            }
-        };
+    let device_bundle = create_device_and_swapchain(window.hwnd(), initial_w, initial_h).unwrap_or_else(|e| {
+        eprintln!("D3D11/DXGI init failed: {e}");
+        std::process::exit(1);
+    });
+    let dcomp = CompositionHost::create_for_hwnd(window.hwnd(), &device_bundle.swapchain).unwrap_or_else(|e| {
+        eprintln!("DComp init failed: {e}");
+        std::process::exit(1);
+    });
+    let mut renderer = ModularRenderer::new(&device_bundle.swapchain).unwrap_or_else(|e| {
+        eprintln!("ModularRenderer init failed: {e}");
+        std::process::exit(1);
+    });
 
-    // 4. Connect swap chain to DirectComposition visual tree
-    let dcomp = match CompositionHost::create_for_hwnd(window.hwnd(), &device_bundle.swapchain) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("DirectComposition setup failed: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    // 5. Initialize Direct2D hardware-accelerated renderer (D-STK-03)
-    let mut renderer = match NotchRenderer::new(&device_bundle.swapchain) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("Failed to initialize NotchRenderer: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    // 6. Register global hotkeys (D-WIN-09)
     let _hk_mute = HotKeyRegistration::register(window.hwnd(), 1, MOD_CONTROL | MOD_ALT, VK_M).ok();
-    let _hk_expand =
-        HotKeyRegistration::register(window.hwnd(), 2, MOD_CONTROL | MOD_ALT, VK_N).ok();
-    let vk_g = windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(0x47);
-    let _hk_glass =
-        HotKeyRegistration::register(window.hwnd(), 3, MOD_CONTROL | MOD_ALT, vk_g).ok();
+    let _hk_expand = HotKeyRegistration::register(window.hwnd(), 2, MOD_CONTROL | MOD_ALT, VK_N).ok();
+    let tray = TrayIcon::new(window.hwnd()).ok();
 
-    // 7. Initialize System Tray Icon
-    let _tray = TrayIcon::new(window.hwnd()).ok();
-
-    // 8. Initialize Notch Engine
     let mut engine = NotchEngine::new(Theme::Obsidian);
-    let mut last_frame_time = Instant::now();
+    let mut data = AppData::new();
+    let mut last_frame = Instant::now();
+    let mut hover_enter_time: Option<Instant> = None;
+    let mut hover_leave_time: Option<Instant> = None;
+    let mut was_cursor_inside = false;
+    let mut was_fullscreen = false;
+    let mut last_nw: i32 = tokens::window::COLLAPSED_WIDTH as i32;
+    let mut last_nh: i32 = tokens::window::COLLAPSED_HEIGHT as i32;
+    let mut last_wx: i32 = monitor.left + (monitor.width() / 2) - last_nw / 2;
+    let mut last_wy: i32 = monitor.top;
+    let mut eq_phase: f32 = 0.0;
     let event_rx = window.event_receiver().clone();
-    let active_module_state = ModuleState::Idle;
+    let module_state = ModuleState::Idle;
+    let test_run = std::env::var("NUVRA_TEST_ONESHOT").map(|v| v.trim() == "1").unwrap_or(false);
 
-    println!("Nuvra v1 Notch engine active.");
-    println!("  -> Docked at top-center of primary monitor.");
-    println!("  -> Move cursor to top edge (or press Ctrl+Alt+N) to expand workspace.");
-    println!(
-        "  -> Press Ctrl+Alt+G (or click 💎 on notch) to toggle Frosted Glass vs Solid Opaque."
-    );
-    println!("  -> Press Ctrl+Alt+M to toggle global microphone mute.");
-    println!("  -> Right-click or left-click and drag horizontally to reposition.");
-    println!("  -> Double-click to snap back to monitor center.");
-    println!("  -> Right-click Nuvra icon in system tray to quit.");
-
-    // One-shot test exit mode for headless test runs
-    let test_run = std::env::var("NUVRA_TEST_ONESHOT")
-        .map(|v| v.trim() == "1")
-        .unwrap_or(false);
-
-    // 9. Win32 message pump and spring simulation loop
     loop {
         if !window.pump_messages() {
             break;
         }
+        renderer.is_move_mode = window.is_dragging();
+        data.poll_os_state();
 
-        // Process window interaction events
         while let Ok(evt) = event_rx.try_recv() {
             match evt {
-                WindowEvent::MouseEnter => {
-                    engine.set_hovered(true);
-                }
-                WindowEvent::MouseLeave => {
-                    engine.set_hovered(false);
+                WindowEvent::MouseEnter | WindowEvent::MouseLeave => {
+                    // Handled deterministically below via live GetCursorPos bounds check
                 }
                 WindowEvent::Click { x, y } => {
-                    if engine.is_expanded() {
-                        if let Some(action) = renderer.handle_click(x as f32, y as f32) {
-                            match action {
-                                nuvra_platform_win::renderer::RendererAction::ToggleDrawer(d) => {
-                                    engine.toggle_drawer(d);
-                                }
-                                nuvra_platform_win::renderer::RendererAction::TogglePlayPause => {
-                                    // Media play/pause action
-                                }
-                                nuvra_platform_win::renderer::RendererAction::ToggleMute => {
-                                    let _ = nuvra_platform_win::audio::toggle_microphone_mute();
-                                }
-                                nuvra_platform_win::renderer::RendererAction::ToggleGlassMode => {
-                                    let is_glass = renderer.is_glass_mode();
-                                    println!(
-                                        "Nuvra visual mode switched: {}",
-                                        if is_glass {
-                                            "Frosted Glass"
-                                        } else {
-                                            "Solid Opaque"
-                                        }
-                                    );
-                                }
-                                nuvra_platform_win::renderer::RendererAction::OpenSettings => {
-                                    // Open settings
-                                }
-                            }
-                        } else if engine.active_drawer().is_some() {
-                            engine.set_active_drawer(None);
-                        } else {
-                            engine.toggle_expand();
+                    let snaps = snap_strings(&data);
+                    let (_, layout) = build_live_layout(&data, &mut engine, &module_state, 0.0);
+                    let vm = make_vm(&data, &snaps, BatteryInfo::query(), window.hover_pos(), eq_phase);
+
+                    if engine.is_expanded() || engine.is_banner() {
+                        if let Some(action) = renderer.handle_click(&layout, x as f32, y as f32, &vm) {
+                            data.apply_action(action, &mut engine);
                         }
                     } else {
-                        engine.toggle_expand();
+                        engine.set_expanded(true);
+                        data.is_pinned = true;
+                    }
+                }
+                WindowEvent::DragStart { x, y } => {
+                    if engine.is_expanded() {
+                        let (_, layout) = build_live_layout(&data, &mut engine, &module_state, 0.0);
+                        if let Some(idx) = hit_test_shelf_drag(&layout, engine.active_drawer(), x as f32, y as f32, data.shelf_store.len()) {
+                            if let Some(item) = data.shelf_store.items().get(idx) {
+                                let _ = start_file_drag_drop(window.hwnd(), &item.path);
+                            }
+                        }
+                    }
+                }
+                WindowEvent::DoubleClick { .. } => {
+                    if engine.is_vertical_expanded() {
+                        engine.set_vertical_expanded(false);
+                        engine.set_expanded(false);
+                        data.is_pinned = false;
+                    } else {
+                        engine.set_expanded(true);
+                        engine.set_vertical_expanded(true);
+                        data.is_pinned = true;
                     }
                 }
                 WindowEvent::RightClick { .. } => {
-                    // Right click handled for drag repositioning
-                }
-                WindowEvent::Moved { .. } => {
-                    // Position updated in real-time inside NotchWindow
+                    if engine.is_vertical_expanded() {
+                        engine.set_vertical_expanded(false);
+                        data.is_pinned = false;
+                    } else {
+                        engine.set_expanded(true);
+                        engine.set_vertical_expanded(true);
+                        data.is_pinned = true;
+                    }
                 }
                 WindowEvent::HotKey { id } => {
                     if id == 2 {
-                        engine.toggle_expand();
+                        if engine.is_vertical_expanded() {
+                            data.apply_action(RendererAction::CollapseNotch, &mut engine);
+                        } else {
+                            engine.set_expanded(true);
+                            engine.set_vertical_expanded(true);
+                            data.is_pinned = true;
+                        }
                     } else if id == 1 {
-                        let _ = nuvra_platform_win::audio::toggle_microphone_mute();
-                    } else if id == 3 {
-                        let is_glass = renderer.toggle_glass_mode();
-                        println!(
-                            "Nuvra visual mode switched: {}",
-                            if is_glass {
-                                "Frosted Glass"
-                            } else {
-                                "Solid Opaque"
-                            }
-                        );
+                        data.apply_action(RendererAction::ToggleMute, &mut engine);
                     }
                 }
-                WindowEvent::DpiChanged { new_dpi: _ } => {
-                    let m = get_primary_monitor_bounds();
-                    window.set_user_center_x(m.left + (m.width() as i32) / 2);
+                WindowEvent::FileDropped(path) => {
+                    let _ = data.shelf_store.add_path(path);
+                    engine.set_expanded(true);
+                    engine.set_vertical_expanded(true);
+                    engine.set_active_drawer(Some(2));
+                    data.is_pinned = true;
                 }
-                WindowEvent::DisplayChanged => {
+                WindowEvent::TrayClick => {
+                    if let Some(t) = &tray {
+                        match t.show_context_menu() {
+                            TRAY_CMD_TOGGLE_NOTCH => {
+                                if engine.is_vertical_expanded() {
+                                    data.apply_action(RendererAction::CollapseNotch, &mut engine);
+                                } else {
+                                    engine.set_expanded(true);
+                                    engine.set_vertical_expanded(true);
+                                    data.is_pinned = true;
+                                }
+                            }
+                            TRAY_CMD_SETTINGS => {
+                                engine.set_expanded(true);
+                                engine.set_vertical_expanded(true);
+                                engine.set_active_drawer(Some(5));
+                                data.is_pinned = true;
+                            }
+                            TRAY_CMD_QUIT => return,
+                            _ => {}
+                        }
+                    }
+                }
+                WindowEvent::Moved { .. } => {}
+                WindowEvent::DpiChanged { .. } | WindowEvent::DisplayChanged => {
                     let m = get_primary_monitor_bounds();
-                    window.set_user_center_x(m.left + (m.width() as i32) / 2);
+                    window.set_user_center_x(m.left + m.width() / 2);
+                    window.set_user_offset_y(0);
                 }
             }
         }
 
-        // Fullscreen auto-hide check (D-WIN-07)
-        let is_fullscreen = is_foreground_fullscreen();
-        if is_fullscreen && !engine.is_pinned() {
-            // Auto-collapse when user is in fullscreen game/video and not pinned
-            engine.set_hovered(false);
+        let is_fs = is_foreground_fullscreen();
+        if is_fs && !was_fullscreen && !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+            hover_enter_time = None;
+            hover_leave_time = None;
+            data.apply_action(RendererAction::CollapseNotch, &mut engine);
+        }
+        was_fullscreen = is_fs;
+
+        // Deterministic Win32 cursor tracking against live animated notch rect (fixes missed TrackMouseEvent)
+        let live_hover_pos = window.cursor_screen_pos().and_then(|(cx, cy)| {
+            if cx >= last_wx && cx < last_wx + last_nw && cy >= last_wy && cy < last_wy + last_nh {
+                Some(((cx - last_wx) as f32, (cy - last_wy) as f32))
+            } else {
+                None
+            }
+        });
+        let cursor_inside = live_hover_pos.is_some();
+        if cursor_inside && !was_cursor_inside {
+            hover_leave_time = None;
+            if !engine.is_expanded() {
+                hover_enter_time = Some(Instant::now());
+            }
+        } else if !cursor_inside && was_cursor_inside {
+            hover_enter_time = None;
+            if !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+                hover_leave_time = Some(Instant::now());
+            }
+        }
+        was_cursor_inside = cursor_inside;
+
+        let now_tick = Instant::now();
+        if let Some(t) = hover_enter_time {
+            if now_tick.duration_since(t).as_millis() as u64 >= tokens::timing::HOVER_INTENT_DEFAULT_MS {
+                hover_enter_time = None;
+                if cursor_inside && !engine.is_expanded() {
+                    engine.set_hovered(true);
+                    engine.set_expanded(true);
+                }
+            }
+        }
+        if let Some(t) = hover_leave_time {
+            if now_tick.duration_since(t).as_millis() as u64 >= tokens::timing::COLLAPSE_DELAY_MS {
+                hover_leave_time = None;
+                if !cursor_inside && !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+                    engine.set_hovered(false);
+                    engine.set_expanded(false);
+                }
+            }
         }
 
         let now = Instant::now();
-        let dt = now.duration_since(last_frame_time).as_secs_f32().min(0.05);
-        last_frame_time = now;
+        let dt = now.duration_since(last_frame).as_secs_f32().min(0.05);
+        last_frame = now;
+        if data.media_playing {
+            eq_phase += dt;
+        }
 
-        let frame = engine.update(&active_module_state, dt);
+        let banner_active = data.banner_until.map(|t| Instant::now() < t).unwrap_or(false) && !data.dnd_active;
+        engine.set_banner(banner_active);
+        data.sync_system_theme(&mut engine);
 
-        // Position and shape physical window to EXACT pill bounds
-        // This eliminates the rectangular desktop shadow/box and confines Acrylic blur to the rounded pill
-        let user_center_x = window.user_center_x();
-        let pill_width = (frame.width as u32).max(160);
-        let pill_height = (frame.height as u32).max(34);
-        let pill_x = user_center_x - (pill_width as i32) / 2;
-        let pill_y = monitor.top;
+        let (frame, layout) = build_live_layout(&data, &mut engine, &module_state, dt);
+        renderer.set_active_drawer(engine.active_drawer());
 
-        window.set_pill_bounds(pill_x, pill_y, pill_width, pill_height, frame.radius);
+        let nw = (frame.width.round() as u32).max(1);
+        let nh = (frame.height.round() as u32).max(1);
+        let wx = window.user_center_x() - (nw as i32) / 2;
+        let wy = monitor.top + window.user_offset_y();
+        last_wx = wx;
+        last_wy = wy;
+        last_nw = nw as i32;
+        last_nh = nh as i32;
+        window.set_pill_bounds(wx, wy, nw, nh, tokens::radius::BOTTOM);
 
-        // Render current pill frame with Direct2D onto the matching window target
-        let params = PillRenderParams {
-            x: 0.0,
-            y: 0.0,
-            width: pill_width as f32,
-            height: pill_height as f32,
-            radius: frame.radius,
-            surface_color: frame.colors.surface,
-            edge_color: frame.colors.edge,
-            text_color: frame.colors.text_primary,
-            text_secondary: frame.colors.text_secondary,
-            text_tertiary: frame.colors.text_tertiary,
-            accent_color: frame.colors.accent,
-            surface_raised: frame.colors.surface_raised,
-            surface_high: frame.colors.surface_high,
-            danger: frame.colors.danger,
-            ok: frame.colors.ok,
-            alpha: 0.35, // Pure translucent frosted glass
-        };
-        let _ = renderer.render_and_present(&device_bundle.swapchain, &params);
-
+        let battery = BatteryInfo::query();
+        let snaps = snap_strings(&data);
+        let vm = make_vm(&data, &snaps, battery, live_hover_pos, eq_phase);
+        let _ = renderer.render_frame(&device_bundle.swapchain, &frame.colors, &layout, &vm);
         let _ = dcomp.commit();
 
         if test_run {
-            println!(
-                "Nuvra oneshot test run complete: frame width={}, height={}",
-                frame.width, frame.height
-            );
+            println!("Nuvra oneshot test run complete: frame width={}, height={}", frame.width, frame.height);
             break;
         }
-
-        // Cap loop rate to display refresh (~120 FPS / 8ms) when animating, sleep when settled
-        if frame.is_settled {
-            std::thread::sleep(std::time::Duration::from_millis(16));
-        } else {
-            std::thread::sleep(std::time::Duration::from_millis(4));
-        }
+        std::thread::sleep(std::time::Duration::from_millis(if frame.is_settled && !data.media_playing { 16 } else { 4 }));
     }
 }

@@ -1,0 +1,477 @@
+// nuvra-render/src/icons/system.rs
+// Custom in-house vector icon path definitions for system tools — Document UI-1 Section 7.
+// R-13: No unsafe.
+#![forbid(unsafe_code)]
+
+use super::PathCommand;
+
+// ── 1. Find (Search): Circle center (8.75, 8.75) r=5.5; handle (12.9, 12.9) to (16.5, 16.5) ──
+pub const FIND_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(8.75, 3.25),
+    PathCommand::ArcTo {
+        rx: 5.5,
+        ry: 5.5,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 8.75,
+        y: 14.25,
+    },
+    PathCommand::ArcTo {
+        rx: 5.5,
+        ry: 5.5,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 8.75,
+        y: 3.25,
+    },
+    PathCommand::Close,
+    PathCommand::MoveTo(12.9, 12.9),
+    PathCommand::LineTo(16.5, 16.5),
+];
+
+// ── 2. Shelf (Folder): body (2.75, 6.25)-(17.25, 16.25), r=2; tab ──
+pub const SHELF_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(2.75, 6.25),
+    PathCommand::LineTo(2.75, 5.0),
+    PathCommand::ArcTo {
+        rx: 1.75,
+        ry: 1.75,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 4.5,
+        y: 3.75,
+    },
+    PathCommand::LineTo(7.4, 3.75),
+    PathCommand::LineTo(8.9, 6.25),
+    PathCommand::LineTo(15.25, 6.25),
+    PathCommand::ArcTo {
+        rx: 2.0,
+        ry: 2.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 17.25,
+        y: 8.25,
+    },
+    PathCommand::LineTo(17.25, 14.25),
+    PathCommand::ArcTo {
+        rx: 2.0,
+        ry: 2.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 15.25,
+        y: 16.25,
+    },
+    PathCommand::LineTo(4.75, 16.25),
+    PathCommand::ArcTo {
+        rx: 2.0,
+        ry: 2.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 2.75,
+        y: 14.25,
+    },
+    PathCommand::Close,
+];
+
+// ── 3. Clipboard: body (4.25, 4.5) to (15.75, 17.25), clip, two text lines ──
+pub const CLIPBOARD_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(7.25, 4.5),
+    PathCommand::LineTo(4.25, 4.5),
+    PathCommand::LineTo(4.25, 17.25),
+    PathCommand::LineTo(15.75, 17.25),
+    PathCommand::LineTo(15.75, 4.5),
+    PathCommand::LineTo(12.75, 4.5),
+    // Clip:
+    PathCommand::MoveTo(7.25, 2.75),
+    PathCommand::LineTo(12.75, 2.75),
+    PathCommand::LineTo(12.75, 5.75),
+    PathCommand::LineTo(7.25, 5.75),
+    PathCommand::Close,
+    // Text lines:
+    PathCommand::MoveTo(7.25, 9.75),
+    PathCommand::LineTo(12.75, 9.75),
+    PathCommand::MoveTo(7.25, 13.0),
+    PathCommand::LineTo(11.25, 13.0),
+];
+
+// ── 4. Mic: capsule (7.5..12.5, 2.5..11.5), pickup arc, stem, base ──
+pub const MIC_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(7.5, 5.0),
+    PathCommand::ArcTo {
+        rx: 2.5,
+        ry: 2.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 12.5,
+        y: 5.0,
+    },
+    PathCommand::LineTo(12.5, 9.0),
+    PathCommand::ArcTo {
+        rx: 2.5,
+        ry: 2.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 7.5,
+        y: 9.0,
+    },
+    PathCommand::Close,
+    PathCommand::MoveTo(4.75, 9.5),
+    PathCommand::ArcTo {
+        rx: 5.25,
+        ry: 5.25,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: false,
+        x: 15.25,
+        y: 9.5,
+    },
+    PathCommand::MoveTo(10.0, 14.75),
+    PathCommand::LineTo(10.0, 17.25),
+    PathCommand::MoveTo(7.25, 17.25),
+    PathCommand::LineTo(12.75, 17.25),
+];
+
+// ── 5. Mic Muted: Mic commands + slash (4, 3.5) to (16, 16.5) ──
+pub const MIC_MUTED_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(7.5, 5.0),
+    PathCommand::ArcTo {
+        rx: 2.5,
+        ry: 2.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 12.5,
+        y: 5.0,
+    },
+    PathCommand::LineTo(12.5, 9.0),
+    PathCommand::ArcTo {
+        rx: 2.5,
+        ry: 2.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 7.5,
+        y: 9.0,
+    },
+    PathCommand::Close,
+    PathCommand::MoveTo(4.75, 9.5),
+    PathCommand::ArcTo {
+        rx: 5.25,
+        ry: 5.25,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: false,
+        x: 15.25,
+        y: 9.5,
+    },
+    PathCommand::MoveTo(10.0, 14.75),
+    PathCommand::LineTo(10.0, 17.25),
+    PathCommand::MoveTo(7.25, 17.25),
+    PathCommand::LineTo(12.75, 17.25),
+    PathCommand::MoveTo(4.0, 3.5),
+    PathCommand::LineTo(16.0, 16.5),
+];
+
+// ── 6. Bell: dome & flare (4.5, 14) to (15.5, 14), dome top (10, 3.75), clapper ──
+pub const BELL_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(4.5, 14.0),
+    PathCommand::CubicTo(5.0, 9.0, 6.0, 3.75, 10.0, 3.75),
+    PathCommand::CubicTo(14.0, 3.75, 15.0, 9.0, 15.5, 14.0),
+    PathCommand::Close,
+    PathCommand::MoveTo(8.25, 14.5),
+    PathCommand::ArcTo {
+        rx: 1.75,
+        ry: 1.75,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: false,
+        x: 11.75,
+        y: 14.5,
+    },
+];
+
+// ── 7. Gear: 8 teeth, outer r=7.75, valley r=6.1, center hole r=2.6 ──
+pub const GEAR_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(10.0, 2.25),
+    PathCommand::LineTo(11.1, 2.25),
+    PathCommand::LineTo(11.5, 4.0),
+    PathCommand::LineTo(12.8, 4.5),
+    PathCommand::LineTo(14.2, 3.5),
+    PathCommand::LineTo(15.0, 4.3),
+    PathCommand::LineTo(14.3, 5.8),
+    PathCommand::LineTo(15.1, 7.0),
+    PathCommand::LineTo(16.8, 7.3),
+    PathCommand::LineTo(16.8, 8.5),
+    PathCommand::LineTo(15.1, 8.8),
+    PathCommand::LineTo(14.3, 10.0),
+    PathCommand::LineTo(15.0, 11.5),
+    PathCommand::LineTo(14.2, 12.3),
+    PathCommand::LineTo(12.8, 11.3),
+    PathCommand::LineTo(11.5, 11.8),
+    PathCommand::LineTo(11.1, 13.5),
+    PathCommand::LineTo(10.0, 13.5),
+    PathCommand::LineTo(9.6, 11.8),
+    PathCommand::LineTo(8.3, 11.3),
+    PathCommand::LineTo(6.9, 12.3),
+    PathCommand::LineTo(6.1, 11.5),
+    PathCommand::LineTo(6.8, 10.0),
+    PathCommand::LineTo(6.0, 8.8),
+    PathCommand::LineTo(4.3, 8.5),
+    PathCommand::LineTo(4.3, 7.3),
+    PathCommand::LineTo(6.0, 7.0),
+    PathCommand::LineTo(6.8, 5.8),
+    PathCommand::LineTo(6.1, 4.3),
+    PathCommand::LineTo(6.9, 3.5),
+    PathCommand::LineTo(8.3, 4.5),
+    PathCommand::LineTo(9.6, 4.0),
+    PathCommand::Close,
+    // Center hole:
+    PathCommand::MoveTo(10.0, 7.4),
+    PathCommand::ArcTo {
+        rx: 2.6,
+        ry: 2.6,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 12.6,
+    },
+    PathCommand::ArcTo {
+        rx: 2.6,
+        ry: 2.6,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 7.4,
+    },
+    PathCommand::Close,
+];
+
+// ── 8. Wi-Fi (18x18): dot (10, 15.5) r=1.25, 3 arcs ──
+pub const WIFI_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(10.0, 14.25),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 16.75,
+    },
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 14.25,
+    },
+    PathCommand::Close,
+    PathCommand::MoveTo(6.8, 12.3),
+    PathCommand::ArcTo {
+        rx: 4.5,
+        ry: 4.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 13.2,
+        y: 12.3,
+    },
+    PathCommand::MoveTo(4.7, 10.2),
+    PathCommand::ArcTo {
+        rx: 7.5,
+        ry: 7.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 15.3,
+        y: 10.2,
+    },
+    PathCommand::MoveTo(2.6, 8.1),
+    PathCommand::ArcTo {
+        rx: 10.5,
+        ry: 10.5,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 17.4,
+        y: 8.1,
+    },
+];
+
+// ── 9. Battery (24x12 box): body (2..20, 1..11) r=3, nub (20..22, 3.5..8.5) ──
+pub const BATTERY_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(5.0, 1.0),
+    PathCommand::LineTo(17.0, 1.0),
+    PathCommand::ArcTo {
+        rx: 3.0,
+        ry: 3.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 20.0,
+        y: 4.0,
+    },
+    PathCommand::LineTo(20.0, 8.0),
+    PathCommand::ArcTo {
+        rx: 3.0,
+        ry: 3.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 17.0,
+        y: 11.0,
+    },
+    PathCommand::LineTo(5.0, 11.0),
+    PathCommand::ArcTo {
+        rx: 3.0,
+        ry: 3.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 2.0,
+        y: 8.0,
+    },
+    PathCommand::LineTo(2.0, 4.0),
+    PathCommand::ArcTo {
+        rx: 3.0,
+        ry: 3.0,
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        x: 5.0,
+        y: 1.0,
+    },
+    PathCommand::Close,
+    // Nub:
+    PathCommand::MoveTo(20.0, 3.5),
+    PathCommand::LineTo(22.0, 3.5),
+    PathCommand::LineTo(22.0, 8.5),
+    PathCommand::LineTo(20.0, 8.5),
+];
+
+// ── 10. Close: (5,5)-(15,15) and (15,5)-(5,15) ──
+pub const CLOSE_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(5.0, 5.0),
+    PathCommand::LineTo(15.0, 15.0),
+    PathCommand::MoveTo(15.0, 5.0),
+    PathCommand::LineTo(5.0, 15.0),
+];
+
+// ── 11. Clear: circle r=7, cross inside ──
+pub const CLEAR_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(10.0, 3.0),
+    PathCommand::ArcTo {
+        rx: 7.0,
+        ry: 7.0,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 17.0,
+    },
+    PathCommand::ArcTo {
+        rx: 7.0,
+        ry: 7.0,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 10.0,
+        y: 3.0,
+    },
+    PathCommand::Close,
+    PathCommand::MoveTo(7.0, 7.0),
+    PathCommand::LineTo(13.0, 13.0),
+    PathCommand::MoveTo(13.0, 7.0),
+    PathCommand::LineTo(7.0, 13.0),
+];
+
+// ── 12. Grip: 2 cols x 3 rows of dots, radius 1.25 ──
+pub const GRIP_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(7.5, 5.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 7.5,
+        y: 7.5,
+    },
+    PathCommand::MoveTo(12.5, 5.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 12.5,
+        y: 7.5,
+    },
+    PathCommand::MoveTo(7.5, 10.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 7.5,
+        y: 12.5,
+    },
+    PathCommand::MoveTo(12.5, 10.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 12.5,
+        y: 12.5,
+    },
+    PathCommand::MoveTo(7.5, 15.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 7.5,
+        y: 17.5,
+    },
+    PathCommand::MoveTo(12.5, 15.0),
+    PathCommand::ArcTo {
+        rx: 1.25,
+        ry: 1.25,
+        rotation: 0.0,
+        large_arc: true,
+        sweep: true,
+        x: 12.5,
+        y: 17.5,
+    },
+];
+
+// ── 18. Logo N (22x22 bold N polygon) ──
+pub const LOGO_N_COMMANDS: &[PathCommand] = &[
+    PathCommand::MoveTo(3.0, 20.0),
+    PathCommand::LineTo(3.0, 2.0),
+    PathCommand::LineTo(8.2, 2.0),
+    PathCommand::LineTo(14.2, 13.2),
+    PathCommand::LineTo(14.2, 2.0),
+    PathCommand::LineTo(19.0, 2.0),
+    PathCommand::LineTo(19.0, 20.0),
+    PathCommand::LineTo(13.8, 20.0),
+    PathCommand::LineTo(7.8, 8.8),
+    PathCommand::LineTo(7.8, 20.0),
+    PathCommand::Close,
+];
