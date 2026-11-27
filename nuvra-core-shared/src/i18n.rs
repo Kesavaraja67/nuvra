@@ -41,3 +41,51 @@ pub mod keys {
     pub const ERROR_MIC_ACCESS_DENIED: &str = "error-mic-access-denied";
     pub const ERROR_MODULE_RESTARTED: &str = "error-module-restarted";
 }
+
+use fluent_bundle::{FluentBundle, FluentResource};
+use unic_langid::LanguageIdentifier;
+
+const EN_US_FTL: &str = include_str!("../../locales/en-US/main.ftl");
+
+/// In-memory Fluent catalog initialized from locales/en-US/main.ftl (R-17).
+pub struct FluentCatalog {
+    bundle: FluentBundle<FluentResource>,
+}
+
+impl FluentCatalog {
+    pub fn en_us() -> Self {
+        let lang: LanguageIdentifier = DEFAULT_LOCALE.parse().unwrap_or_default();
+        let mut bundle = FluentBundle::new(vec![lang]);
+        if let Ok(res) = FluentResource::try_new(EN_US_FTL.to_string()) {
+            let _ = bundle.add_resource(res);
+        }
+        Self { bundle }
+    }
+
+    /// Resolve a Fluent message key without arguments, returning the key on miss.
+    pub fn get(&self, key: &str) -> String {
+        let Some(msg) = self.bundle.get_message(key) else {
+            return key.to_string();
+        };
+        let Some(pattern) = msg.value() else {
+            return key.to_string();
+        };
+        let mut errors = Vec::new();
+        self.bundle
+            .format_pattern(pattern, None, &mut errors)
+            .into_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fluent_catalog_resolves_v1_keys() {
+        let cat = FluentCatalog::en_us();
+        assert_eq!(cat.get(keys::APP_NAME), "Nuvra");
+        assert_eq!(cat.get(keys::MIC_MUTED), "Mic muted");
+        assert_eq!(cat.get(keys::MEDIA_NO_SOURCE), "Nothing playing");
+    }
+}

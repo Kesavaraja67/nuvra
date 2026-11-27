@@ -1,11 +1,11 @@
 // nuvra-mod-clipboard/src/module.rs
-// Clipboard module — history, pinning, AES-256-GCM storage.
-// Phase 0: Module trait stub. Full implementation in v1.
-// R-12: Explicitly Phase 0 stub — PARTIAL.
+// Clipboard module — history, search, pinning, and exclusion filtering (Section 14.6).
 // R-13: No unsafe.
 // R-20: Clipboard content never logged.
 #![forbid(unsafe_code)]
 
+use crate::exclusions::is_excluded;
+use crate::history::ClipboardHistoryStore;
 use crate::state::ClipboardState;
 use flume::Sender;
 use nuvra_core_shared::{
@@ -14,6 +14,7 @@ use nuvra_core_shared::{
 };
 
 pub struct ClipboardModule {
+    store: ClipboardHistoryStore,
     state: ClipboardState,
     tx: Option<Sender<ModuleEvent>>,
 }
@@ -21,8 +22,75 @@ pub struct ClipboardModule {
 impl ClipboardModule {
     pub fn new() -> Self {
         Self {
+            store: ClipboardHistoryStore::default(),
             state: ClipboardState::default(),
             tx: None,
+        }
+    }
+
+    pub fn store(&self) -> &ClipboardHistoryStore {
+        &self.store
+    }
+
+    /// Pin or unpin an item and refresh/publish module state.
+    pub fn set_pinned(&mut self, id: u64, pinned: bool) -> bool {
+        if self.store.set_pinned(id, pinned) {
+            self.refresh_state();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Delete an item by ID and refresh/publish module state.
+    pub fn delete_item(&mut self, id: u64) -> bool {
+        if self.store.delete(id) {
+            self.refresh_state();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Wipe all unpinned items and refresh/publish module state.
+    pub fn wipe_unpinned(&mut self) {
+        self.store.wipe_unpinned();
+        self.refresh_state();
+    }
+
+    /// Wipe all clipboard history including pinned items and refresh/publish module state.
+    pub fn wipe_all(&mut self) {
+        self.store.wipe_all();
+        self.refresh_state();
+    }
+
+    /// Process a new clipboard text capture with exclusion check.
+    pub fn process_capture(&mut self, text: String, source_window_class: Option<&str>) -> bool {
+        if let Some(class) = source_window_class {
+            if is_excluded(class) {
+                // Silently drop excluded sensitive content per D-DAT-03
+                return false;
+            }
+        }
+
+        let id = self.store.add(text);
+        if id > 0 {
+            self.refresh_state();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn refresh_state(&mut self) {
+        self.state.item_count = self.store.len();
+        self.state.pinned_count = self.store.pinned_count();
+
+        if let Some(tx) = &self.tx {
+            let _ = tx.try_send(ModuleEvent {
+                module_id: self.id(),
+                state: ModuleState::Clipboard(self.state.snapshot()),
+            });
         }
     }
 }
@@ -44,16 +112,11 @@ impl Module for ClipboardModule {
 
     fn init(&mut self, tx: Sender<ModuleEvent>) -> Result<(), ModuleError> {
         self.tx = Some(tx);
-        // v1: AddClipboardFormatListener on HWND; open SQLCipher DB.
+        self.refresh_state();
         Ok(())
     }
 
-    fn on_event(&mut self, event: OsEvent) -> Result<(), ModuleError> {
-        if let OsEvent::ClipboardChanged = event {
-            // v1: read clipboard text, check exclusions, encrypt+store.
-            // R-20: never log the text.
-            self.state.item_count += 1;
-        }
+    fn on_event(&mut self, _event: OsEvent) -> Result<(), ModuleError> {
         Ok(())
     }
 
@@ -62,7 +125,45 @@ impl Module for ClipboardModule {
     }
 
     fn shutdown(&mut self) {
-        // v1: RemoveClipboardFormatListener; close DB.
         self.tx = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clipboard_module_capture_and_exclusion() {
+        let mut module = ClipboardModule::new();
+        assert_eq!(module.id(), "clipboard");
+
+        let (tx, rx) = flume::bounded(10);
+        module.init(tx).expect("init failed");
+        let _ = rx.try_recv(); // drain init
+
+        // Normal capture
+        assert!(module.process_capture("Hello from Notepad".into(), Some("Notepad")));
+        let evt = rx.try_recv().expect("event expected");
+        if let ModuleState::Clipboard(snap) = evt.state {
+            assert_eq!(snap.item_count, 1);
+        } else {
+            panic!("Expected Clipboard state");
+        }
+
+        // Excluded password manager capture (D-DAT-03)
+        assert!(!module.process_capture("SecretPassword123".into(), Some("1Password")));
+        assert_eq!(module.store().len(), 1); // unchanged
+
+        let id = module.store().search("")[0].id;
+        assert!(module.set_pinned(id, true));
+        let evt = rx.try_recv().expect("pin event expected");
+        assert!(matches!(evt.state, ModuleState::Clipboard(ref s) if s.pinned_count == 1));
+
+        module.wipe_all();
+        let evt = rx.try_recv().expect("wipe event expected");
+        assert!(
+            matches!(evt.state, ModuleState::Clipboard(ref s) if s.item_count == 0 && s.pinned_count == 0)
+        );
     }
 }

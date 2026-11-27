@@ -2,8 +2,8 @@
 // Criterion benchmarks for the renderer — D-PERF-02/03.
 // Phase 0: harness structure only. Real benchmarks run in v1 against the live renderer.
 //
-// UNVERIFIED: Requires `cargo bench` on Floor hardware.
-// See docs/owner-test-scripts/phase-0-test-script.md § Benchmarks.
+// UNVERIFIED: Requires `cargo bench` on Floor/Mid/High hardware.
+// See docs/owner-test-scripts/v1-test-script.md § 3.
 //
 // Target thresholds (D-PERF-01):
 //   - Token access:            < 10 ns
@@ -33,9 +33,16 @@ fn bench_token_access(c: &mut Criterion) {
 
 /// Validate that window dimension lookups are free.
 fn bench_window_tokens(c: &mut Criterion) {
-    c.bench_function("window_glance_dimensions", |b| {
+    c.bench_function("window_notch_dimensions", |b| {
         b.iter(|| {
-            criterion::black_box((tokens::window::GLANCE_WIDTH, tokens::window::GLANCE_HEIGHT))
+            criterion::black_box((
+                tokens::window::COLLAPSED_WIDTH,
+                tokens::window::COLLAPSED_HEIGHT,
+                tokens::window::EXPANDED_WIDTH,
+                tokens::window::EXPANDED_HEIGHT,
+                tokens::window::BANNER_WIDTH,
+                tokens::window::BANNER_HEIGHT,
+            ))
         })
     });
 }

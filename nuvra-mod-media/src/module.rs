@@ -1,11 +1,12 @@
 // nuvra-mod-media/src/module.rs
-// Media module — GSMTC (GlobalSystemMediaTransportControls) integration.
-// Phase 0: Module trait stub. Full implementation in v1.
-// R-12: This is explicitly scoped as a Phase 0 stub — PARTIAL (see handoff).
+// Media module — GSMTC session manager and audio visualizer (Section 14.2).
 // R-13: No unsafe.
 #![forbid(unsafe_code)]
 
+use crate::gsmtc::GsmtcController;
+use crate::lyrics::LyricsCache;
 use crate::state::MediaState;
+use crate::visualizer::AudioVisualizer;
 use flume::Sender;
 use nuvra_core_shared::{
     event::OsEvent,
@@ -13,6 +14,9 @@ use nuvra_core_shared::{
 };
 
 pub struct MediaModule {
+    gsmtc: GsmtcController,
+    visualizer: AudioVisualizer,
+    lyrics: LyricsCache,
     state: MediaState,
     tx: Option<Sender<ModuleEvent>>,
 }
@@ -20,8 +24,61 @@ pub struct MediaModule {
 impl MediaModule {
     pub fn new() -> Self {
         Self {
+            gsmtc: GsmtcController::new(),
+            visualizer: AudioVisualizer::new(),
+            lyrics: LyricsCache::new(),
             state: MediaState::default(),
             tx: None,
+        }
+    }
+
+    pub fn visualizer_mut(&mut self) -> &mut AudioVisualizer {
+        &mut self.visualizer
+    }
+
+    pub fn lyrics_mut(&mut self) -> &mut LyricsCache {
+        &mut self.lyrics
+    }
+
+    /// Update media snapshot from the OS GSMTC session.
+    pub fn refresh_session(&mut self) {
+        let snap = self.gsmtc.query_current_session();
+        self.apply_snapshot(snap);
+    }
+
+    pub(crate) fn apply_snapshot(
+        &mut self,
+        snapshot: Option<nuvra_core_shared::event::MediaSnapshot>,
+    ) {
+        if let Some(snapshot) = snapshot {
+            self.state.title = snapshot.title;
+            self.state.artist = snapshot.artist;
+            self.state.is_playing = snapshot.is_playing;
+            self.state.position_s = snapshot.position_s;
+            self.state.duration_s = snapshot.duration_s;
+            self.state.has_art = snapshot.has_art;
+            self.state.art_key = snapshot.art_key;
+            self.state.volume_norm = snapshot.volume_norm;
+
+            if let Some(tx) = &self.tx {
+                let _ = tx.try_send(ModuleEvent {
+                    module_id: self.id(),
+                    state: ModuleState::Media(self.state.snapshot()),
+                });
+            }
+        } else if self.state.is_playing
+            || !self.state.title.is_empty()
+            || !self.state.artist.is_empty()
+            || self.state.duration_s > 0.0
+            || self.state.position_s > 0.0
+        {
+            self.state = MediaState::default();
+            if let Some(tx) = &self.tx {
+                let _ = tx.try_send(ModuleEvent {
+                    module_id: self.id(),
+                    state: ModuleState::Media(self.state.snapshot()),
+                });
+            }
         }
     }
 }
@@ -38,19 +95,21 @@ impl Module for MediaModule {
     }
 
     fn capabilities(&self) -> &[Capability] {
-        // No special OS capability required; GSMTC is accessible to any process.
-        &[]
+        &[Capability::AudioLoopback]
     }
 
     fn init(&mut self, tx: Sender<ModuleEvent>) -> Result<(), ModuleError> {
         self.tx = Some(tx);
-        // v1: register GSMTC session manager change handler here.
+        self.refresh_session();
         Ok(())
     }
 
     fn on_event(&mut self, event: OsEvent) -> Result<(), ModuleError> {
-        if let OsEvent::MediaSessionChanged = event {
-            // v1: query GSMTC, update self.state, push ModuleEvent via self.tx.
+        match event {
+            OsEvent::MediaSessionChanged | OsEvent::TimerTick { .. } => {
+                self.refresh_session();
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -60,7 +119,60 @@ impl Module for MediaModule {
     }
 
     fn shutdown(&mut self) {
-        // v1: unregister GSMTC callbacks.
         self.tx = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nuvra_core_shared::event::MediaSnapshot;
+
+    #[test]
+    fn test_media_module_init_and_state() {
+        let mut module = MediaModule::new();
+        assert_eq!(module.id(), "media");
+        assert_eq!(module.capabilities(), &[Capability::AudioLoopback]);
+
+        let (tx, _rx) = flume::bounded(10);
+        module.init(tx).expect("init failed");
+
+        let state = module.state();
+        assert!(matches!(state, ModuleState::Media(_)));
+    }
+
+    #[test]
+    fn test_media_module_clears_when_session_disappears() {
+        let mut module = MediaModule::new();
+        let (tx, rx) = flume::bounded(10);
+        module.init(tx).expect("init failed");
+        while rx.try_recv().is_ok() {}
+
+        module.apply_snapshot(Some(MediaSnapshot {
+            title: "Track 1".into(),
+            artist: "Artist".into(),
+            is_playing: true,
+            position_s: 12.0,
+            duration_s: 180.0,
+            ..Default::default()
+        }));
+        let active_evt = rx.try_recv().expect("active media event");
+        assert!(
+            matches!(active_evt.state, ModuleState::Media(ref s) if s.is_playing && s.title == "Track 1")
+        );
+
+        module.apply_snapshot(None);
+        let cleared_evt = rx.try_recv().expect("inactive transition event");
+        if let ModuleState::Media(s) = cleared_evt.state {
+            assert!(!s.is_playing);
+            assert!(s.title.is_empty());
+            assert_eq!(s.position_s, 0.0);
+        } else {
+            panic!("Expected Media state");
+        }
+        if let ModuleState::Media(s) = module.state() {
+            assert!(!s.is_playing);
+            assert!(s.title.is_empty());
+        }
     }
 }

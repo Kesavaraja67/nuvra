@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuvra Settings</title>
+  <link rel="stylesheet" href="src/tokens.css">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+
+<body data-theme="obsidian">
+  <!-- Liquid Background Animated Blobs (kmp-glassmorphism-ui) -->
+  <div class="liquid-bg" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="settings-container">
+    <nav class="settings-sidebar">
+      <div class="brand-header">
+        <div class="brand-gem"></div>
+        <span class="brand-title">Nuvra</span>
+        <span class="brand-badge">CORE</span>
+      </div>
+      <ul class="nav-list">
+        <li><button type="button" class="nav-item active" data-tab="general" aria-current="page">General</button></li>
+        <li><button type="button" class="nav-item" data-tab="appearance">Appearance</button></li>
+        <li><button type="button" class="nav-item" data-tab="modules">Modules</button></li>
+        <li><button type="button" class="nav-item" data-tab="hotkeys">Hotkeys</button></li>
+        <li><button type="button" class="nav-item" data-tab="privacy">Privacy</button></li>
+        <li><button type="button" class="nav-item" data-tab="about">About</button></li>
+      </ul>
+    </nav>
+
+    <main class="settings-content">
+      <!-- General Tab -->
+      <section id="tab-general" class="tab-panel active">
+        <h2>General</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-startup">Launch at Windows startup</label>
+            <div class="setting-desc" id="desc-startup">Automatically initialize Nuvra when signing in to Windows</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-startup" aria-describedby="desc-startup" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="select-monitor">Primary Display Anchor</label>
+            <div class="setting-desc" id="desc-monitor">Monitor where the topmost notch is docked</div>
+          </div>
+          <select id="select-monitor" class="glass-select" aria-describedby="desc-monitor">
+            <option value="primary">Primary Display (Auto-detect)</option>
+            <option value="display1">Display 1 (1920×1080)</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Appearance Tab -->
+      <section id="tab-appearance" class="tab-panel">
+        <h2>Appearance & Glass Surface</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="select-theme">Color Theme</label>
+            <div class="setting-desc" id="desc-theme">Acoustic glassmorphic styling for notch and controls</div>
+          </div>
+          <select id="select-theme" class="glass-select" aria-describedby="desc-theme">
+            <option value="obsidian" selected>Obsidian Glass (Dark)</option>
+            <option value="paper">Paper Glass (Light)</option>
+            <option value="signal">Signal (High Contrast AA)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-follow-theme">Follow System Theme</label>
+            <div class="setting-desc" id="desc-follow-theme">Harmonize between dark and light glass with Windows
+              personalization</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-follow-theme" aria-describedby="desc-follow-theme">
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+      </section>
+
+      <!-- Modules Tab -->
+      <section id="tab-modules" class="tab-panel">
+        <h2>Active Modules</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-media">Media Controller & Visualizer</label>
+            <div class="setting-desc" id="desc-media">Windows GSMTC sessions and live WASAPI loopback spectrum
+              visualizer</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-media" aria-describedby="desc-media" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-mic">Microphone Hardware Dispatcher</label>
+            <div class="setting-desc" id="desc-mic">Active call detection, default capture endpoint monitoring, global
+              mute</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-mic" aria-describedby="desc-mic" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-notifications">Notification Banners</label>
+            <div class="setting-desc" id="desc-notifications">Compact notch toasts honoring Focus Assist / Do Not
+              Disturb</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-notifications" aria-describedby="desc-notifications" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-shelf">Files Staging Shelf</label>
+            <div class="setting-desc" id="desc-shelf">Interactive drag-and-drop file staging area on the notch bezel
+            </div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-shelf" aria-describedby="desc-shelf" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-title" for="toggle-clipboard">In-Memory Clipboard History</label>
+            <div class="setting-desc" id="desc-clipboard">Volatile session history stored in process memory with instant
+              search</div>
+          </div>
+          <span class="glass-switch">
+            <input type="checkbox" id="toggle-clipboard" aria-describedby="desc-clipboard" checked>
+            <span class="glass-slider"></span>
+          </span>
+        </div>
+      </section>
+
+      <!-- Hotkeys Tab -->
+      <section id="tab-hotkeys" class="tab-panel">
+        <h2>Global Hotkeys</h2>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Toggle Notch Expand</div>
+            <div class="setting-desc">Expand or collapse the notch from any active desktop application</div>
+          </div>
+          <span class="hotkey-badge">Ctrl + Alt + N</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Global Microphone Mute</div>
+            <div class="setting-desc">Mute default system capture device globally across all processes</div>
+          </div>
+          <span class="hotkey-badge">Ctrl + Alt + M</span>
+        </div>
+      </section>
+
+      <!-- Privacy Tab -->
+      <section id="tab-privacy" class="tab-panel">
+        <h2>Security & Privacy (R-19, R-20)</h2>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Zero Telemetry Architecture</div>
+            <div class="setting-desc">Nuvra never transmits telemetry, metrics, or personal data to any external network
+            </div>
+          </div>
+          <span class="status-badge ok">Enforced (0 calls)</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Password Manager Exclusions</div>
+            <div class="setting-desc">Clipboard capture is skipped when the foreground window class matches 1Password,
+              Bitwarden, or KeePass</div>
+          </div>
+          <span class="status-badge ok">Active Protection</span>
+        </div>
+      </section>
+
+      <!-- About Tab -->
+      <section id="tab-about" class="tab-panel">
+        <h2>About Nuvra</h2>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Platform Architecture</div>
+            <div class="setting-desc">DirectComposition + Direct2D Hardware Acceleration • Rust 1.99</div>
+          </div>
+          <span class="version-tag">Core v1.0.0</span>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Compositor Engine</div>
+            <div class="setting-desc">Pre-multiplied DXGI Composition across Floor, Mid, and High profiles</div>
+          </div>
+          <span class="status-badge ok">Hardware Active</span>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="src/app.js"></script>
+</body>
+
+</html>

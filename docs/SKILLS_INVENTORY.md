@@ -102,3 +102,33 @@ Generated: 2026-11-21 (Phase 0, S-01) — Updated after Chrome plugin additions.
 ## Additional Skills Available (Chrome-sourced)
 - `chrome-devtools-plugin`: Chrome DevTools MCP — available for renderer debugging and performance profiling (Lighthouse, Puppeteer). Useful for WebView2 settings UI testing.
 - `google-antigravity-sdk`: AGY SDK for multi-agent orchestration. Available but not in required list.
+
+---
+
+## UI-1 Rework Skills Verification (Section 12.1)
+Checked: 2026-11-24 (Document UI-1, Stage U0)
+
+| UI-1 Required Skill | Matched In Environment | Location | Status |
+|---|---|---|---|
+| `taste-skill` and `taste-skill-v1` | `taste-skill`, `taste-skill-v1` | skills/taste-skill/, skills/taste-skill-v1/ | ✅ Present |
+| `minimalist-skill` | `minimalist-skill` | skills/minimalist-skill/ | ✅ Present |
+| `redesign-skill` | `redesign-skill` | skills/redesign-skill/ | ✅ Present |
+| `brandkit` | `brandkit` | skills/brandkit/ | ✅ Present |
+| `design-system` equivalent | `design-token` + `theming-system` + `design-token-audit` | .agents/skills/ | ✅ Functional match |
+| `design-critique` | `design-critique` | .agents/skills/design-critique/ | ✅ Present |
+| `accessibility-review` equivalent | `accessibility-audit` | .agents/skills/accessibility-audit/ | ✅ Functional match |
+| `ux-copy` equivalent | `ux-writing` | .agents/skills/ux-writing/ | ✅ Functional match |
+| `design-handoff` equivalent | `handoff-spec` | .agents/skills/handoff-spec/ | ✅ Functional match |
+| `system-design` | `system-design` | skills/system-design/ | ✅ Present |
+| `architecture` (ADR) | `architecture` / `adr-skill` | skills/architecture/ | ✅ Present |
+| `code-review` equivalent | `code-reviewer` | .agents/skills/code-reviewer/ | ✅ Functional match |
+| `testing-strategy` equivalent | `test-driven-development` + `usability-test-plan` | .agents/skills/ | ✅ Functional match |
+| `debug` equivalent | `karpathy-guidelines` | .agents/skills/karpathy-guidelines/ | ✅ Functional match |
+| `documentation` equivalent | `documentation-template` | .agents/skills/documentation-template/ | ✅ Functional match |
+| `deploy-checklist` equivalent | `design-qa-checklist` | .agents/skills/design-qa-checklist/ | ✅ Functional match |
+| `frontend-design` | `frontend-design` | .agents/skills/frontend-design/ | ✅ Present (Settings window only) |
+| `image-to-code-skill` | `image-to-code-skill` | skills/image-to-code-skill/ | ✅ Present (Settings window only) |
+| `modern-web-guidance` | `modern-web-guidance-plugin` | config/plugins/modern-web-guidance-plugin/ | ✅ Present (Settings window only) |
+
+**Result:** Zero missing skills. S-02 PASS for Document UI-1.
+

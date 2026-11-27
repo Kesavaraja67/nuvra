@@ -1,179 +1,98 @@
 /* settings-ui/src/tokens.css
- * CSS custom properties mirroring nuvra-render/src/tokens.rs — Section 6 of master spec.
- * R-27: Every color, size, radius, and duration in the Settings WebView2 UI
- *       must reference these properties. No magic numbers, no off-palette colors.
- * R-28: Purple/blue gradients, glassmorphism, centered-everything layouts forbidden.
- * Used by: settings WebView2 UI only (ADR-0006, D-STK-04).
- * Never used in the native notch renderer.
+ * CSS custom properties mirroring nuvra-render/src/tokens.rs (UI-1 locked tokens).
+ * Pure solid matte palette — no backdrop blur, no generic gradients.
  */
 
-/* ── Obsidian theme (dark default) ─────────────────────────────────────────── */
+/* ── Obsidian theme (dark default) ────────────────────────────────────────── */
 :root,
 [data-theme="obsidian"] {
-  --surface:         #060709;
-  --surface-raised:  #0E1014;
-  --surface-high:    #161920;
-  --edge:            #232732;
-  --edge-lit:        rgba(255, 255, 255, 0.06);
-  --text-primary:    #F3F4F6;
-  --text-secondary:  #9AA0AC;
-  --text-tertiary:   #5E6470;
-  --accent:          #FF6B3D;
+  --surface:         #0C0D12;
+  --surface-raised:  #14161D;
+  --surface-high:    #1C1F28;
+  --edge:            #262A36;
+  --plate-rest:      rgba(255, 255, 255, 0.05);
+  --plate-hover:     rgba(255, 255, 255, 0.10);
+  --plate-active:    rgba(255, 255, 255, 0.16);
+  --divider:         rgba(255, 255, 255, 0.32);
+  --text-primary:    #F4F5F8;
+  --text-secondary:  #A3A8B5;
+  --text-tertiary:   #6F7482;
+  --accent:          #6D3CFB;
+  --accent-hi:       #8A6BFF;
+  --accent-secondary:#3DD68C;
+  --accent-purple:   #8A6BFF;
+  --glass-surface:   rgba(14, 16, 22, 0.78);
+  --glass-blur:      blur(24px);
+  --glass-border:    rgba(255, 255, 255, 0.12);
+  --glass-border-hi: rgba(255, 255, 255, 0.24);
+  --glass-card:      rgba(20, 22, 29, 0.68);
+  --glass-card-hover:rgba(255, 255, 255, 0.09);
+  --nav-active-bg:   rgba(255, 255, 255, 0.12);
   --danger:          #FF4258;
   --ok:              #46D39A;
   --warning:         #FFC247;
+  --logo-a:          #6A2CF0;
+  --logo-b:          #9055F8;
 }
 
-/* ── Paper theme (light) ────────────────────────────────────────────────────── */
+/* ── Paper theme (light solid) ────────────────────────────────────────────── */
 [data-theme="paper"] {
   --surface:         #F6F5F2;
   --surface-raised:  #FFFFFF;
   --surface-high:    #ECEAE4;
   --edge:            #DAD8D2;
-  --edge-lit:        rgba(255, 255, 255, 0.80);
+  --plate-rest:      rgba(0, 0, 0, 0.05);
+  --plate-hover:     rgba(0, 0, 0, 0.10);
+  --plate-active:    rgba(0, 0, 0, 0.16);
+  --divider:         rgba(0, 0, 0, 0.32);
   --text-primary:    #14151A;
   --text-secondary:  #5A5E68;
   --text-tertiary:   #8A8D96;
-  --accent:          #E8501F;
+  --accent:          #5B2EE0;
+  --accent-hi:       #754DF0;
+  --accent-secondary:#1E9E6A;
+  --accent-purple:   #754DF0;
+  --glass-surface:   rgba(255, 255, 255, 0.76);
+  --glass-blur:      blur(20px);
+  --glass-border:    rgba(20, 21, 26, 0.14);
+  --glass-border-hi: rgba(20, 21, 26, 0.28);
+  --glass-card:      rgba(255, 255, 255, 0.84);
+  --glass-card-hover:rgba(20, 21, 26, 0.06);
+  --nav-active-bg:   rgba(91, 46, 224, 0.14);
   --danger:          #D42A40;
   --ok:              #1E9E6A;
   --warning:         #B87A00;
+  --logo-a:          #5B2EE0;
+  --logo-b:          #754DF0;
 }
 
-/* ── Signal theme (high contrast — always free, honoring Windows HCM) ─────── */
+/* ── Signal theme (high contrast — always free) ──────────────────────────── */
 [data-theme="signal"] {
   --surface:         #000000;
   --surface-raised:  #0A0A0A;
   --surface-high:    #141414;
   --edge:            #FFFFFF;
-  --edge-lit:        rgba(255, 255, 255, 1.00);
+  --plate-rest:      transparent;
+  --plate-hover:     transparent;
+  --plate-active:    transparent;
+  --divider:         #FFFFFF;
   --text-primary:    #FFFFFF;
   --text-secondary:  #E0E0E0;
   --text-tertiary:   #BDBDBD;
   --accent:          #FFD400;
+  --accent-hi:       #FFD400;
+  --accent-secondary:#7CFF9E;
+  --accent-purple:   #FFD400;
+  --glass-surface:   #000000;
+  --glass-blur:      none;
+  --glass-border:    #FFFFFF;
+  --glass-border-hi: #FFD400;
+  --glass-card:      #0A0A0A;
+  --glass-card-hover:#141414;
+  --nav-active-bg:   #141414;
   --danger:          #FF6B6B;
   --ok:              #7CFF9E;
   --warning:         #FFD400;
-}
-
-/* ── Pro themes (entitlement-gated — applied via data-theme attribute) ──────── */
-[data-theme="graphite-sand"] {
-  --surface:         #121316;
-  --surface-raised:  #1A1C21;
-  --surface-high:    #22252C;
-  --edge:            #2E323C;
-  --edge-lit:        rgba(255, 255, 255, 0.05);
-  --text-primary:    #F0EDE6;
-  --text-secondary:  #9A9589;
-  --text-tertiary:   #5E5C56;
-  --accent:          #D6C29A;
-  --danger:          #FF4258;
-  --ok:              #46D39A;
-  --warning:         #FFC247;
-}
-
-[data-theme="ink-blue"] {
-  --surface:         #070B14;
-  --surface-raised:  #0D1424;
-  --surface-high:    #131D30;
-  --edge:            #1E2A42;
-  --edge-lit:        rgba(127, 163, 255, 0.08);
-  --text-primary:    #E8EEFF;
-  --text-secondary:  #8A9EC0;
-  --text-tertiary:   #4E6080;
-  --accent:          #7FA3FF;
-  --danger:          #FF4258;
-  --ok:              #46D39A;
-  --warning:         #FFC247;
-}
-
-/* ── Windows High Contrast Mode / Forced Colors Override ─────────────────── */
-/* Placed after all theme definitions to override explicit theme attributes */
-@media (forced-colors: active) {
-  :root,
-  [data-theme] {
-    --surface:         #000000;
-    --surface-raised:  #0A0A0A;
-    --surface-high:    #141414;
-    --edge:            #FFFFFF;
-    --edge-lit:        rgba(255, 255, 255, 1.00);
-    --text-primary:    #FFFFFF;
-    --text-secondary:  #E0E0E0;
-    --text-tertiary:   #BDBDBD;
-    --accent:          #FFD400;
-    --danger:          #FF6B6B;
-    --ok:              #7CFF9E;
-    --warning:         #FFD400;
-  }
-}
-
-/* ── Spacing grid (4 px base unit) ─────────────────────────────────────────── */
-:root {
-  --space-xs:  4px;
-  --space-s:   8px;
-  --space-m:  12px;
-  --space-l:  16px;
-  --space-xl: 24px;
-}
-
-/* ── Typography ─────────────────────────────────────────────────────────────── */
-:root {
-  --font-family:   "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --font-size-caption: 11px;
-  --font-size-small:   12px;
-  --font-size-body:    13px;
-  --font-size-title:   15px;
-  --font-size-display: 20px;
-  --font-numeric:      tabular-nums;
-}
-
-/* ── Radii ──────────────────────────────────────────────────────────────────── */
-/* Note: notch radii are top=0, bottom corners only. Settings uses controls only. */
-:root {
-  --radius-control:  8px;
-  --radius-ambient: 14px;
-  --radius-glance:  16px;
-  --radius-expanded: 18px;
-}
-
-/* ── Timing ─────────────────────────────────────────────────────────────────── */
-:root {
-  --duration-crossfade:       120ms;
-  --duration-reduced-motion:   80ms;
-  --easing-crossfade: cubic-bezier(0.2, 0, 0, 1);
-}
-
-/* ── Base reset (settings window only) ─────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  background-color: var(--surface);
-  color:            var(--text-primary);
-  font-family:      var(--font-family);
-  font-size:        var(--font-size-body);
-  font-variant-numeric: var(--font-numeric);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ── Focus ring ─────────────────────────────────────────────────────────────── */
-/* R-27: Focus ring color = --accent (D-ACC-01). */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ── Reduced-motion override ────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration:   var(--duration-reduced-motion) !important;
-    transition-duration:  var(--duration-reduced-motion) !important;
-  }
+  --logo-a:          #FFD400;
+  --logo-b:          #FFD400;
 }
