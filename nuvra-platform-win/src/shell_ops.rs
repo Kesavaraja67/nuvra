@@ -15,29 +15,56 @@ pub fn reveal_in_explorer(path: &Path) -> bool {
         .is_ok()
 }
 
-fn pick_unique_zip_path_with_limit(
+struct ReservedZipGuard(Option<PathBuf>);
+
+impl ReservedZipGuard {
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for ReservedZipGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+fn try_reserve_zip_file(cand: &Path) -> Result<bool, String> {
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(cand)
+    {
+        Ok(_file) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(format!("Failed to reserve destination archive: {e}")),
+    }
+}
+
+fn reserve_unique_zip_path_with_limit(
     dir: &Path,
     stem: &str,
     max_numbered: usize,
 ) -> Result<PathBuf, String> {
-    let base = format!("{stem}.zip");
-    let first = dir.join(&base);
-    if !first.exists() {
-        return Ok(first);
+    let base = dir.join(format!("{stem}.zip"));
+    if try_reserve_zip_file(&base)? {
+        return Ok(base);
     }
     for n in 2..=max_numbered {
         let cand = dir.join(format!("{stem} ({n}).zip"));
-        if !cand.exists() {
+        if try_reserve_zip_file(&cand)? {
             return Ok(cand);
         }
     }
     let fallback = dir.join(format!("{stem}-archive.zip"));
-    if !fallback.exists() {
+    if try_reserve_zip_file(&fallback)? {
         return Ok(fallback);
     }
     for n in 2..=max_numbered {
         let cand = dir.join(format!("{stem}-archive ({n}).zip"));
-        if !cand.exists() {
+        if try_reserve_zip_file(&cand)? {
             return Ok(cand);
         }
     }
@@ -114,7 +141,8 @@ pub fn compress_to_zip(paths: &[PathBuf]) -> Result<PathBuf, String> {
         .and_then(|s| s.to_str())
         .filter(|s| !s.is_empty())
         .unwrap_or("Nuvra-Archive");
-    let zip_path = pick_unique_zip_path_with_limit(dest_dir, stem, 999)?;
+    let zip_path = reserve_unique_zip_path_with_limit(dest_dir, stem, 999)?;
+    let mut reserved_guard = ReservedZipGuard(Some(zip_path.clone()));
 
     let mut cmd = Command::new("tar.exe");
     cmd.arg("-a")
@@ -131,9 +159,9 @@ pub fn compress_to_zip(paths: &[PathBuf]) -> Result<PathBuf, String> {
         .status()
         .map_err(|e| format!("Failed to invoke tar.exe: {e}"))?;
     if status.success() && zip_path.exists() {
+        reserved_guard.disarm();
         Ok(zip_path)
     } else {
-        let _ = std::fs::remove_file(&zip_path);
         Err("ZIP compression failed".into())
     }
 }
@@ -192,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pick_unique_zip_path_never_overwrites_existing_fallback() {
+    fn test_reserve_unique_zip_path_never_overwrites_existing_fallback() {
         let dir = std::env::temp_dir().join("nuvra_zip_fallback_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
@@ -200,11 +228,12 @@ mod tests {
         std::fs::write(dir.join("item (2).zip"), b"2").expect("w");
         std::fs::write(dir.join("item-archive.zip"), b"fb").expect("w");
 
-        let next = pick_unique_zip_path_with_limit(&dir, "item", 2).expect("next archive");
+        let next = reserve_unique_zip_path_with_limit(&dir, "item", 2).expect("next archive");
         assert_eq!(next, dir.join("item-archive (2).zip"));
+        assert!(next.exists());
 
-        std::fs::write(dir.join("item-archive (2).zip"), b"fb2").expect("w");
-        assert!(pick_unique_zip_path_with_limit(&dir, "item", 2).is_err());
+        assert!(reserve_unique_zip_path_with_limit(&dir, "item", 2).is_err());
+        assert_eq!(std::fs::read(dir.join("item-archive.zip")).unwrap(), b"fb");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -10,7 +10,7 @@ license.workspace = true
 # All unsafe blocks carry a // SAFETY: comment.
 
 [dependencies]
-nuvra-render        = { path = "../nuvra-render" }
+nuvra-render        = { path = "../nuvra-render", version = "0.0.1-dev" }
 windows.workspace   = true
 tracing.workspace   = true
 thiserror.workspace = true

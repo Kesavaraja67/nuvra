@@ -3,14 +3,14 @@
 // Every unsafe block carries a // SAFETY: comment.
 
 use windows::core::w;
-use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW, SetForegroundWindow,
-    TrackPopupMenuEx, HMENU, IDI_APPLICATION, MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN,
-    TPM_LEFTALIGN, TPM_RETURNCMD,
+    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW, PostMessageW,
+    SetForegroundWindow, TrackPopupMenuEx, HMENU, IDI_APPLICATION, MF_SEPARATOR, MF_STRING,
+    TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RETURNCMD, WM_NULL,
 };
 
 pub const WM_TRAY_CALLBACK: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 101;
@@ -92,6 +92,7 @@ impl TrayIcon {
                 self.hwnd,
                 None,
             );
+            let _ = PostMessageW(self.hwnd, WM_NULL, WPARAM(0), LPARAM(0));
 
             let _ = DestroyMenu(menu);
             cmd.0 as u32

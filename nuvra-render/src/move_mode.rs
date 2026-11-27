@@ -259,13 +259,14 @@ mod tests {
         assert!(flashed); // Snapped to top edge!
         assert_eq!(mc.current_offset().y, 0.0);
 
-        // Escape restores initial position (0, 0) and clears r_down_pos
-        mc.on_right_down(100.0, 100.0);
+        // Escape restores initial position (0, 0) from active drag
         let restored = mc.on_escape();
         assert_eq!(restored, Some(MoveOffset { x: 0.0, y: 0.0 }));
         assert_eq!(mc.state(), MoveState::Inactive);
 
-        // Pointer movement after Escape or Enter must NOT trigger HeldDrag without a new right-down
+        // Separate Inactive case: on_right_down -> on_escape clears r_down_pos without activating drag
+        mc.on_right_down(100.0, 100.0);
+        assert_eq!(mc.on_escape(), None);
         let (changed, _) = mc.on_pointer_move(120.0, 120.0, &mon, 190.0, 38.0);
         assert!(!changed);
         assert_eq!(mc.state(), MoveState::Inactive);

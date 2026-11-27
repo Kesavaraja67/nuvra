@@ -13,7 +13,7 @@ use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
+    GetCapture, ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
 };
 use windows::Win32::UI::Shell::{DragAcceptFiles, DragFinish, DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -508,11 +508,20 @@ unsafe extern "system" fn notch_wnd_proc(
             }
             LRESULT(0)
         }
-        WM_CAPTURECHANGED | WM_CANCELMODE => {
+        WM_CAPTURECHANGED => {
             shared.r_is_down.store(false, Ordering::Release);
             shared.drag_active.store(false, Ordering::Release);
             shared.l_is_down.store(false, Ordering::Release);
             LRESULT(0)
+        }
+        WM_CANCELMODE => {
+            shared.r_is_down.store(false, Ordering::Release);
+            shared.drag_active.store(false, Ordering::Release);
+            shared.l_is_down.store(false, Ordering::Release);
+            if GetCapture() == hwnd {
+                let _ = ReleaseCapture();
+            }
+            DefWindowProcW(hwnd, msg, wparam, lparam)
         }
         WM_KEYDOWN => {
             if wparam.0 == 0x1B {

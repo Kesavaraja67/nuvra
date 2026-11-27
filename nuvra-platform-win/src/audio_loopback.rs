@@ -86,10 +86,17 @@ fn loopback_worker(active: Arc<AtomicBool>, stop: Arc<AtomicBool>, ring: Arc<Mut
             // SAFETY: Valid initialized loopback IAudioCaptureClient polling available packets.
             let ok = unsafe { drain_packets(cap, ch, is_f32, &ring) };
             if !ok {
+                invalidate_ring(&ring);
                 client = None;
             }
         }
         std::thread::sleep(Duration::from_millis(16));
+    }
+}
+
+pub(crate) fn invalidate_ring(ring: &Arc<Mutex<Vec<f32>>>) {
+    if let Ok(mut guard) = ring.lock() {
+        guard.clear();
     }
 }
 
@@ -222,5 +229,12 @@ mod tests {
         push_silence_frames(&ring, RING_CAP);
         let guard = ring.lock().expect("lock");
         assert!(guard.iter().all(|&s| s == 0.0));
+        drop(guard);
+
+        // Capture failure invalidation empties stale samples until fresh packets arrive
+        invalidate_ring(&ring);
+        assert!(ring.lock().expect("lock").is_empty());
+        push_ring_samples(&ring, &[0.25, -0.25]);
+        assert_eq!(ring.lock().expect("lock").as_slice(), &[0.25, -0.25]);
     }
 }

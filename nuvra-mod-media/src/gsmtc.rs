@@ -98,34 +98,41 @@ fn worker_loop(latest: Arc<Mutex<Option<MediaSnapshot>>>, cmd_rx: flume::Receive
                 .ok()
                 .and_then(|op| op.get().ok());
         }
-        let snap = manager.as_ref().and_then(find_active_snapshot);
+        let found = manager.as_ref().and_then(find_active_snapshot);
+        let (snap, active_session) = match found {
+            Some((s, sess)) => (Some(s), Some(sess)),
+            None => (None, None),
+        };
         if let Ok(mut guard) = latest.lock() {
             *guard = snap;
         }
         match cmd_rx.recv_timeout(Duration::from_millis(350)) {
             Ok(GsmtcCmd::Stop) | Err(flume::RecvTimeoutError::Disconnected) => break,
             Ok(GsmtcCmd::TogglePlayPause(reply)) => {
-                let ok = manager
-                    .as_ref()
-                    .and_then(pick_control_session)
+                let target = active_session
+                    .clone()
+                    .or_else(|| manager.as_ref().and_then(pick_control_session));
+                let ok = target
                     .and_then(|s| s.TryTogglePlayPauseAsync().ok())
                     .and_then(|op| op.get().ok())
                     .unwrap_or(false);
                 let _ = reply.send(ok);
             }
             Ok(GsmtcCmd::Next(reply)) => {
-                let ok = manager
-                    .as_ref()
-                    .and_then(pick_control_session)
+                let target = active_session
+                    .clone()
+                    .or_else(|| manager.as_ref().and_then(pick_control_session));
+                let ok = target
                     .and_then(|s| s.TrySkipNextAsync().ok())
                     .and_then(|op| op.get().ok())
                     .unwrap_or(false);
                 let _ = reply.send(ok);
             }
             Ok(GsmtcCmd::Prev(reply)) => {
-                let ok = manager
-                    .as_ref()
-                    .and_then(pick_control_session)
+                let target = active_session
+                    .clone()
+                    .or_else(|| manager.as_ref().and_then(pick_control_session));
+                let ok = target
                     .and_then(|s| s.TrySkipPreviousAsync().ok())
                     .and_then(|op| op.get().ok())
                     .unwrap_or(false);
@@ -133,9 +140,10 @@ fn worker_loop(latest: Arc<Mutex<Option<MediaSnapshot>>>, cmd_rx: flume::Receive
             }
             Ok(GsmtcCmd::SeekSeconds(secs, reply)) => {
                 let ticks = (secs.max(0.0) as f64 * 10_000_000.0) as i64;
-                let ok = manager
-                    .as_ref()
-                    .and_then(pick_control_session)
+                let target = active_session
+                    .clone()
+                    .or_else(|| manager.as_ref().and_then(pick_control_session));
+                let ok = target
                     .and_then(|s| s.TryChangePlaybackPositionAsync(ticks).ok())
                     .and_then(|op| op.get().ok())
                     .unwrap_or(false);
@@ -284,13 +292,13 @@ fn friendly_source_app(session: &GlobalSystemMediaTransportControlsSession) -> S
 
 fn find_active_snapshot(
     manager: &GlobalSystemMediaTransportControlsSessionManager,
-) -> Option<MediaSnapshot> {
+) -> Option<(MediaSnapshot, GlobalSystemMediaTransportControlsSession)> {
     // 1. Prefer playing session (current first, then all sessions)
     if let Ok(cur) = manager.GetCurrentSession() {
         let (state, rate) = session_playback_info(&cur);
         if state == Some(true) {
             if let Some(snap) = snapshot_from_session(&cur, true, rate) {
-                return Some(snap);
+                return Some((snap, cur));
             }
         }
     }
@@ -301,7 +309,7 @@ fn find_active_snapshot(
                 let (state, rate) = session_playback_info(&s);
                 if state == Some(true) {
                     if let Some(snap) = snapshot_from_session(&s, true, rate) {
-                        return Some(snap);
+                        return Some((snap, s));
                     }
                 }
             }
@@ -311,7 +319,7 @@ fn find_active_snapshot(
             let (state, _) = session_playback_info(&cur);
             if state == Some(false) {
                 if let Some(snap) = snapshot_from_session(&cur, false, 0.0) {
-                    return Some(snap);
+                    return Some((snap, cur));
                 }
             }
         }
@@ -320,7 +328,7 @@ fn find_active_snapshot(
                 let (state, _) = session_playback_info(&s);
                 if state == Some(false) {
                     if let Some(snap) = snapshot_from_session(&s, false, 0.0) {
-                        return Some(snap);
+                        return Some((snap, s));
                     }
                 }
             }

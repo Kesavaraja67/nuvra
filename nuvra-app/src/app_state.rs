@@ -81,16 +81,38 @@ pub(crate) struct AppData {
     pub last_poll: Instant,
 }
 
+pub(crate) fn initial_clipboard_state(
+    seq: u32,
+    excluded: bool,
+    outcome: ClipboardReadResult,
+) -> (Option<String>, u32, u32, u8) {
+    if excluded {
+        return (None, seq, 0, 0);
+    }
+    match outcome {
+        ClipboardReadResult::Text(txt) => (Some(txt), seq, 0, 0),
+        ClipboardReadResult::NonText => (None, seq, 0, 0),
+        ClipboardReadResult::OpenFailed => (None, seq.wrapping_sub(1), seq, 1),
+    }
+}
+
 impl AppData {
     pub fn new(owner_hwnd: HWND) -> Self {
         let fluent = FluentCatalog::en_us();
         let mut clip_store = ClipboardHistoryStore::new(50);
-        let last_clip_seq = get_clipboard_sequence();
-        let fg_class = get_foreground_window_class();
-        if !fg_class.as_deref().is_some_and(is_excluded) {
-            if let ClipboardReadResult::Text(txt) = try_read_clipboard_text() {
-                clip_store.add(txt);
-            }
+        let seq = get_clipboard_sequence();
+        let excluded = get_foreground_window_class()
+            .as_deref()
+            .is_some_and(is_excluded);
+        let outcome = if excluded {
+            ClipboardReadResult::NonText
+        } else {
+            try_read_clipboard_text()
+        };
+        let (init_text, last_clip_seq, clip_retry_seq, clip_retry_count) =
+            initial_clipboard_state(seq, excluded, outcome);
+        if let Some(txt) = init_text {
+            clip_store.add(txt);
         }
         let mut notif_queue = NotificationQueue::new(10);
         let os_notifs = OsNotificationReader::new();
@@ -138,8 +160,8 @@ impl AppData {
             startup_enabled: is_startup_enabled(),
             clip_store,
             last_clip_seq,
-            clip_retry_seq: 0,
-            clip_retry_count: 0,
+            clip_retry_seq,
+            clip_retry_count,
             owner_hwnd,
             shelf_store: ShelfStore::new(),
             zip_tx,
@@ -557,5 +579,23 @@ mod tests {
         assert!(!data.is_pinned);
         data.apply_action(RendererAction::ToggleMute, &mut engine);
         assert!(!data.is_pinned);
+    }
+
+    #[test]
+    fn test_init_clipboard_keeps_open_failed_pending_and_consumes_others() {
+        let (txt, last, retry_seq, retries) =
+            initial_clipboard_state(42, false, ClipboardReadResult::OpenFailed);
+        assert!(txt.is_none());
+        assert_ne!(last, 42);
+        assert_eq!(retry_seq, 42);
+        assert_eq!(retries, 1);
+
+        let (_, last_nontext, _, _) =
+            initial_clipboard_state(42, false, ClipboardReadResult::NonText);
+        assert_eq!(last_nontext, 42);
+
+        let (_, last_excl, _, _) =
+            initial_clipboard_state(42, true, ClipboardReadResult::OpenFailed);
+        assert_eq!(last_excl, 42);
     }
 }
