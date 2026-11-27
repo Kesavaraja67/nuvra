@@ -8,7 +8,7 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW,
-    GetWindowRect, GWL_STYLE, WS_CAPTION, WS_MAXIMIZE,
+    GetWindowRect, GWL_STYLE, WS_CAPTION,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +57,16 @@ pub fn get_primary_monitor_bounds() -> MonitorBounds {
     }
 }
 
+pub(crate) fn qualifies_as_fullscreen(style: u32, window_rect: RECT, monitor_rect: RECT) -> bool {
+    if (style & WS_CAPTION.0) != 0 {
+        return false;
+    }
+    window_rect.left <= monitor_rect.left
+        && window_rect.top <= monitor_rect.top
+        && window_rect.right >= monitor_rect.right
+        && window_rect.bottom >= monitor_rect.bottom
+}
+
 /// Check if the currently active foreground window is occupying the entire screen in fullscreen (D-WIN-07).
 /// Used by the Notch engine to auto-hide the notch unless pinned.
 pub fn is_foreground_fullscreen() -> bool {
@@ -97,16 +107,30 @@ pub fn is_foreground_fullscreen() -> bool {
             return false;
         }
 
-        // True fullscreen check: ignore desktop shells, captioned windows, and standard maximized apps
+        // Ignore desktop shells and captioned windows; allow borderless maximized fullscreen apps.
         let style = GetWindowLongW(fg_hwnd, GWL_STYLE) as u32;
-        if (style & WS_CAPTION.0) != 0 || (style & WS_MAXIMIZE.0) != 0 {
-            return false;
-        }
+        qualifies_as_fullscreen(style, window_rect, info.rcMonitor)
+    }
+}
 
-        // Fullscreen match: covers or exceeds the monitor rect
-        window_rect.left <= info.rcMonitor.left
-            && window_rect.top <= info.rcMonitor.top
-            && window_rect.right >= info.rcMonitor.right
-            && window_rect.bottom >= info.rcMonitor.bottom
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_borderless_maximized_window_qualifies_as_fullscreen() {
+        let full = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        let ws_maximize = 0x0100_0000;
+        assert!(qualifies_as_fullscreen(ws_maximize, full, full));
+        assert!(!qualifies_as_fullscreen(
+            ws_maximize | WS_CAPTION.0,
+            full,
+            full
+        ));
     }
 }

@@ -16,6 +16,7 @@ use nuvra_platform_win::camera::CameraMonitor;
 pub struct MicModule {
     detector: CallDetector,
     camera: Option<CameraMonitor>,
+    camera_owned_call: bool,
     state: MicState,
     tx: Option<Sender<ModuleEvent>>,
 }
@@ -28,6 +29,7 @@ impl MicModule {
         Self {
             detector: CallDetector::new(),
             camera,
+            camera_owned_call: false,
             state: MicState {
                 is_muted: initial_mute,
                 call_active: false,
@@ -53,9 +55,26 @@ impl MicModule {
     }
 
     pub fn set_call_active(&mut self, active: bool, app_name: Option<String>) {
+        self.camera_owned_call = false;
         self.state.call_active = active;
         self.state.app_name = app_name;
         self.notify_change();
+    }
+
+    pub(crate) fn update_camera_activity(&mut self, cam_active: bool) {
+        if cam_active {
+            if !self.state.call_active {
+                self.camera_owned_call = true;
+                self.state.call_active = true;
+                self.state.app_name = Some("Camera Active".into());
+                self.notify_change();
+            }
+        } else if self.camera_owned_call {
+            self.camera_owned_call = false;
+            self.state.call_active = false;
+            self.state.app_name = None;
+            self.notify_change();
+        }
     }
 
     fn notify_change(&self) {
@@ -103,10 +122,9 @@ impl Module for MicModule {
             }
             OsEvent::TimerTick { .. } => {
                 // Periodic sensor state check
-                if let Some(cam) = &self.camera {
-                    if cam.is_camera_active() && !self.state.call_active {
-                        self.set_call_active(true, Some("Camera Active".into()));
-                    }
+                if let Some(cam_active) = self.camera.as_ref().map(CameraMonitor::is_camera_active)
+                {
+                    self.update_camera_activity(cam_active);
                 }
             }
             _ => {}
@@ -155,5 +173,37 @@ mod tests {
         } else {
             panic!("Expected Mic state");
         }
+    }
+
+    #[test]
+    fn test_mic_module_camera_activity_cleared_without_clobbering_other_call() {
+        let mut module = MicModule::new();
+        let (tx, rx) = flume::bounded(10);
+        module.init(tx).expect("init failed");
+        let _ = rx.try_recv();
+
+        // Camera starts -> sets camera-owned call activity
+        module.update_camera_activity(true);
+        let evt = rx.try_recv().expect("camera start event");
+        assert!(
+            matches!(evt.state, ModuleState::Mic(ref s) if s.call_active && s.app_name.as_deref() == Some("Camera Active"))
+        );
+
+        // Camera stops -> clears camera-owned activity
+        module.update_camera_activity(false);
+        let evt = rx.try_recv().expect("camera stop event");
+        assert!(
+            matches!(evt.state, ModuleState::Mic(ref s) if !s.call_active && s.app_name.is_none())
+        );
+
+        // External call detector owns call_active -> camera stop preserves it
+        module.set_call_active(true, Some("Teams".into()));
+        let _ = rx.try_recv();
+        module.update_camera_activity(true);
+        module.update_camera_activity(false);
+        assert!(rx.try_recv().is_err());
+        assert!(
+            matches!(module.state(), ModuleState::Mic(ref s) if s.call_active && s.app_name.as_deref() == Some("Teams"))
+        );
     }
 }

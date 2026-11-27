@@ -115,9 +115,10 @@ pub fn compute_layout(
             tokens::window::COLLAPSED_WIDTH,
             tokens::window::COLLAPSED_HEIGHT,
         ),
-        LayoutState::Expanded => {
-            (tokens::window::EXPANDED_WIDTH, tokens::window::EXPANDED_HEIGHT)
-        }
+        LayoutState::Expanded => (
+            tokens::window::EXPANDED_WIDTH,
+            tokens::window::EXPANDED_HEIGHT,
+        ),
         LayoutState::Banner => (tokens::window::BANNER_WIDTH, tokens::window::BANNER_HEIGHT),
     };
 

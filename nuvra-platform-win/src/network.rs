@@ -81,7 +81,11 @@ fn fallback_physical_adapter() -> NetworkKind {
             }
         }
     }
-    if saw_wifi { NetworkKind::Wifi } else { NetworkKind::Offline }
+    if saw_wifi {
+        NetworkKind::Wifi
+    } else {
+        NetworkKind::Offline
+    }
 }
 
 #[cfg(test)]
@@ -91,6 +95,9 @@ mod tests {
     #[test]
     fn test_network_query_returns_valid_variant() {
         let kind = query_active_network();
-        assert!(matches!(kind, NetworkKind::Wifi | NetworkKind::Ethernet | NetworkKind::Offline));
+        assert!(matches!(
+            kind,
+            NetworkKind::Wifi | NetworkKind::Ethernet | NetworkKind::Offline
+        ));
     }
 }

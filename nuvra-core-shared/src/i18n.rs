@@ -64,10 +64,16 @@ impl FluentCatalog {
 
     /// Resolve a Fluent message key without arguments, returning the key on miss.
     pub fn get(&self, key: &str) -> String {
-        let Some(msg) = self.bundle.get_message(key) else { return key.to_string() };
-        let Some(pattern) = msg.value() else { return key.to_string() };
+        let Some(msg) = self.bundle.get_message(key) else {
+            return key.to_string();
+        };
+        let Some(pattern) = msg.value() else {
+            return key.to_string();
+        };
         let mut errors = Vec::new();
-        self.bundle.format_pattern(pattern, None, &mut errors).into_owned()
+        self.bundle
+            .format_pattern(pattern, None, &mut errors)
+            .into_owned()
     }
 }
 

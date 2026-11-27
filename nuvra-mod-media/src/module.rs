@@ -42,7 +42,15 @@ impl MediaModule {
 
     /// Update media snapshot from the OS GSMTC session.
     pub fn refresh_session(&mut self) {
-        if let Some(snapshot) = self.gsmtc.query_current_session() {
+        let snap = self.gsmtc.query_current_session();
+        self.apply_snapshot(snap);
+    }
+
+    pub(crate) fn apply_snapshot(
+        &mut self,
+        snapshot: Option<nuvra_core_shared::event::MediaSnapshot>,
+    ) {
+        if let Some(snapshot) = snapshot {
             self.state.title = snapshot.title;
             self.state.artist = snapshot.artist;
             self.state.is_playing = snapshot.is_playing;
@@ -50,7 +58,21 @@ impl MediaModule {
             self.state.duration_s = snapshot.duration_s;
             self.state.has_art = snapshot.has_art;
             self.state.art_key = snapshot.art_key;
+            self.state.volume_norm = snapshot.volume_norm;
 
+            if let Some(tx) = &self.tx {
+                let _ = tx.try_send(ModuleEvent {
+                    module_id: self.id(),
+                    state: ModuleState::Media(self.state.snapshot()),
+                });
+            }
+        } else if self.state.is_playing
+            || !self.state.title.is_empty()
+            || !self.state.artist.is_empty()
+            || self.state.duration_s > 0.0
+            || self.state.position_s > 0.0
+        {
+            self.state = MediaState::default();
             if let Some(tx) = &self.tx {
                 let _ = tx.try_send(ModuleEvent {
                     module_id: self.id(),
@@ -84,11 +106,7 @@ impl Module for MediaModule {
 
     fn on_event(&mut self, event: OsEvent) -> Result<(), ModuleError> {
         match event {
-            OsEvent::MediaSessionChanged => {
-                self.refresh_session();
-            }
-            OsEvent::TimerTick { .. } if self.state.is_playing => {
-                // Periodic update while playing
+            OsEvent::MediaSessionChanged | OsEvent::TimerTick { .. } => {
                 self.refresh_session();
             }
             _ => {}
@@ -108,6 +126,7 @@ impl Module for MediaModule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nuvra_core_shared::event::MediaSnapshot;
 
     #[test]
     fn test_media_module_init_and_state() {
@@ -120,5 +139,40 @@ mod tests {
 
         let state = module.state();
         assert!(matches!(state, ModuleState::Media(_)));
+    }
+
+    #[test]
+    fn test_media_module_clears_when_session_disappears() {
+        let mut module = MediaModule::new();
+        let (tx, rx) = flume::bounded(10);
+        module.init(tx).expect("init failed");
+        while rx.try_recv().is_ok() {}
+
+        module.apply_snapshot(Some(MediaSnapshot {
+            title: "Track 1".into(),
+            artist: "Artist".into(),
+            is_playing: true,
+            position_s: 12.0,
+            duration_s: 180.0,
+            ..Default::default()
+        }));
+        let active_evt = rx.try_recv().expect("active media event");
+        assert!(
+            matches!(active_evt.state, ModuleState::Media(ref s) if s.is_playing && s.title == "Track 1")
+        );
+
+        module.apply_snapshot(None);
+        let cleared_evt = rx.try_recv().expect("inactive transition event");
+        if let ModuleState::Media(s) = cleared_evt.state {
+            assert!(!s.is_playing);
+            assert!(s.title.is_empty());
+            assert_eq!(s.position_s, 0.0);
+        } else {
+            panic!("Expected Media state");
+        }
+        if let ModuleState::Media(s) = module.state() {
+            assert!(!s.is_playing);
+            assert!(s.title.is_empty());
+        }
     }
 }

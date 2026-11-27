@@ -17,13 +17,14 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::Shell::{DragAcceptFiles, DragFinish, DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, PeekMessageW,
-    PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_DBLCLKS,
-    GWLP_USERDATA, HTCLIENT, HTTRANSPARENT, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOSIZE,
-    SWP_NOZORDER, SW_SHOWNA, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_HOTKEY,
-    WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
-    WM_NCHITTEST, WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WNDCLASSEXW,
-    WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, PeekMessageW, PostQuitMessage,
+    RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_DBLCLKS, GWLP_USERDATA,
+    HTCLIENT, HTTRANSPARENT, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWNA,
+    WM_CANCELMODE, WM_CAPTURECHANGED, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND,
+    WM_HOTKEY, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE,
+    WM_MOUSEMOVE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    WS_POPUP,
 };
 
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -160,29 +161,55 @@ impl NotchWindow {
             hwnd
         };
 
-        Ok(Self { hwnd, shared, event_rx: rx })
+        Ok(Self {
+            hwnd,
+            shared,
+            event_rx: rx,
+        })
     }
 
-    pub fn hwnd(&self) -> HWND { self.hwnd }
-    pub fn event_receiver(&self) -> &flume::Receiver<WindowEvent> { &self.event_rx }
-    pub fn current_dpi(&self) -> u32 { self.shared.current_dpi.load(Ordering::Relaxed) }
-    pub fn user_center_x(&self) -> i32 { self.shared.user_center_x.load(Ordering::Acquire) }
-    pub fn set_user_center_x(&self, cx: i32) { self.shared.user_center_x.store(cx, Ordering::Release); }
-    pub fn user_offset_y(&self) -> i32 { self.shared.user_offset_y.load(Ordering::Acquire) }
-    pub fn set_user_offset_y(&self, oy: i32) { self.shared.user_offset_y.store(oy, Ordering::Release); }
-    pub fn is_dragging(&self) -> bool { self.shared.drag_active.load(Ordering::Acquire) }
+    pub fn hwnd(&self) -> HWND {
+        self.hwnd
+    }
+    pub fn event_receiver(&self) -> &flume::Receiver<WindowEvent> {
+        &self.event_rx
+    }
+    pub fn current_dpi(&self) -> u32 {
+        self.shared.current_dpi.load(Ordering::Relaxed)
+    }
+    pub fn user_center_x(&self) -> i32 {
+        self.shared.user_center_x.load(Ordering::Acquire)
+    }
+    pub fn set_user_center_x(&self, cx: i32) {
+        self.shared.user_center_x.store(cx, Ordering::Release);
+    }
+    pub fn user_offset_y(&self) -> i32 {
+        self.shared.user_offset_y.load(Ordering::Acquire)
+    }
+    pub fn set_user_offset_y(&self, oy: i32) {
+        self.shared.user_offset_y.store(oy, Ordering::Release);
+    }
+    pub fn is_dragging(&self) -> bool {
+        self.shared.drag_active.load(Ordering::Acquire)
+    }
 
     pub fn update_hit_bounds(&self, x: i32, y: i32, width: u32, height: u32) {
         self.shared.hit_x.store(x, Ordering::Release);
         self.shared.hit_y.store(y, Ordering::Release);
         self.shared.hit_width.store(width as i32, Ordering::Release);
-        self.shared.hit_height.store(height as i32, Ordering::Release);
+        self.shared
+            .hit_height
+            .store(height as i32, Ordering::Release);
     }
 
     pub fn hover_pos(&self) -> Option<(f32, f32)> {
         let hx = self.shared.hover_x.load(Ordering::Acquire);
         let hy = self.shared.hover_y.load(Ordering::Acquire);
-        if hx >= 0 && hy >= 0 { Some((hx as f32, hy as f32)) } else { None }
+        if hx >= 0 && hy >= 0 {
+            Some((hx as f32, hy as f32))
+        } else {
+            None
+        }
     }
 
     /// Directly sample live OS cursor screen coordinates for jitter-free hover detection.
@@ -196,13 +223,27 @@ impl NotchWindow {
     pub fn set_geometry(&self, x: i32, y: i32, width: u32, height: u32) {
         self.shared.current_x.store(x, Ordering::Release);
         self.shared.current_y.store(y, Ordering::Release);
-        self.shared.current_width.store(width as i32, Ordering::Release);
-        self.shared.current_height.store(height as i32, Ordering::Release);
-        self.shared.user_center_x.store(x + (width as i32) / 2, Ordering::Release);
+        self.shared
+            .current_width
+            .store(width as i32, Ordering::Release);
+        self.shared
+            .current_height
+            .store(height as i32, Ordering::Release);
+        self.shared
+            .user_center_x
+            .store(x + (width as i32) / 2, Ordering::Release);
         self.shared.user_offset_y.store(y, Ordering::Release);
         // SAFETY: SetWindowPos with SWP_NOACTIVATE and SWP_NOZORDER preserves topmost layer.
         unsafe {
-            let _ = SetWindowPos(self.hwnd, HWND(std::ptr::null_mut()), x, y, width as i32, height as i32, SWP_NOACTIVATE | SWP_NOZORDER);
+            let _ = SetWindowPos(
+                self.hwnd,
+                HWND(std::ptr::null_mut()),
+                x,
+                y,
+                width as i32,
+                height as i32,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
         }
     }
 
@@ -223,7 +264,15 @@ impl NotchWindow {
         if prev_x != x || prev_y != y || prev_w != w || prev_h != h {
             // SAFETY: SetWindowPos only runs when bounds changed, avoiding per-frame DWM/input contention.
             unsafe {
-                let _ = SetWindowPos(self.hwnd, HWND(std::ptr::null_mut()), x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER);
+                let _ = SetWindowPos(
+                    self.hwnd,
+                    HWND(std::ptr::null_mut()),
+                    x,
+                    y,
+                    w,
+                    h,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                );
             }
         }
     }
@@ -308,8 +357,12 @@ unsafe extern "system" fn notch_wnd_proc(
             if shared.l_is_down.load(Ordering::Acquire) {
                 let sx = shared.l_down_x.load(Ordering::Acquire);
                 let sy = shared.l_down_y.load(Ordering::Acquire);
-                if ((lx - sx).abs() >= 6 || (ly - sy).abs() >= 6) && shared.l_is_down.swap(false, Ordering::AcqRel) {
-                    let _ = shared.event_tx.try_send(WindowEvent::DragStart { x: sx, y: sy });
+                if ((lx - sx).abs() >= 6 || (ly - sy).abs() >= 6)
+                    && shared.l_is_down.swap(false, Ordering::AcqRel)
+                {
+                    let _ = shared
+                        .event_tx
+                        .try_send(WindowEvent::DragStart { x: sx, y: sy });
                 }
             }
 
@@ -317,7 +370,8 @@ unsafe extern "system" fn notch_wnd_proc(
             let _ = GetCursorPos(&mut pt);
 
             // Only right-mouse drag (>4px threshold) initiates 2D move mode so left-clicks never swallow buttons
-            if shared.r_is_down.load(Ordering::Acquire) && !shared.drag_active.load(Ordering::Acquire)
+            if shared.r_is_down.load(Ordering::Acquire)
+                && !shared.drag_active.load(Ordering::Acquire)
             {
                 let sx = shared.r_down_x.load(Ordering::Acquire);
                 let sy = shared.r_down_y.load(Ordering::Acquire);
@@ -339,38 +393,56 @@ unsafe extern "system" fn notch_wnd_proc(
                 let m = crate::monitor::get_primary_monitor_bounds();
                 let mon_center_x = m.left + m.width() / 2;
 
-                // 1. Magnetic snap to top edge (within 12px)
+                let min_y = m.top;
+                let max_y = (m.top + m.height() - 40).max(min_y);
                 let final_win_y = if (raw_win_y - m.top).abs() <= 12 {
                     m.top
                 } else {
-                    raw_win_y.clamp(m.top, m.top + m.height() - 40)
+                    raw_win_y.clamp(min_y, max_y)
                 };
 
-                // 2. Magnetic snap to center X (within 12px)
                 let raw_cx = raw_win_x + cur_w / 2;
-                let final_cx = if (raw_cx - mon_center_x).abs() <= 12 {
+                let min_cx = m.left + cur_w / 2;
+                let max_cx = m.left + m.width() - cur_w / 2;
+                let final_cx = if (raw_cx - mon_center_x).abs() <= 12 || min_cx > max_cx {
                     mon_center_x
                 } else {
-                    raw_cx.clamp(m.left + cur_w / 2, m.left + m.width() - cur_w / 2)
+                    raw_cx.clamp(min_cx, max_cx)
                 };
                 let final_win_x = final_cx - cur_w / 2;
 
                 shared.user_center_x.store(final_cx, Ordering::Release);
-                shared.user_offset_y.store(final_win_y - m.top, Ordering::Release);
+                shared
+                    .user_offset_y
+                    .store(final_win_y - m.top, Ordering::Release);
                 shared.current_x.store(final_win_x, Ordering::Release);
                 shared.current_y.store(final_win_y, Ordering::Release);
 
-                let _ = SetWindowPos(hwnd, HWND(std::ptr::null_mut()), final_win_x, final_win_y, 0, 0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-                let _ = shared.event_tx.try_send(WindowEvent::Moved { x: final_win_x, y: final_win_y });
+                let _ = SetWindowPos(
+                    hwnd,
+                    HWND(std::ptr::null_mut()),
+                    final_win_x,
+                    final_win_y,
+                    0,
+                    0,
+                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                let _ = shared.event_tx.try_send(WindowEvent::Moved {
+                    x: final_win_x,
+                    y: final_win_y,
+                });
                 return LRESULT(0);
             }
 
             if !shared.is_hovered.swap(true, Ordering::AcqRel) {
                 let _ = shared.event_tx.try_send(WindowEvent::MouseEnter);
 
-                let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
-                    dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+                let mut tme = TRACKMOUSEEVENT {
+                    cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                    dwFlags: TME_LEAVE,
+                    hwndTrack: hwnd,
+                    dwHoverTime: 0,
+                };
                 let _ = TrackMouseEvent(&mut tme);
             }
             LRESULT(0)
@@ -413,22 +485,33 @@ unsafe extern "system" fn notch_wnd_proc(
             shared.r_down_y.store(pt.y, Ordering::Release);
             shared.drag_start_x.store(pt.x, Ordering::Release);
             shared.drag_start_y.store(pt.y, Ordering::Release);
-            let cur_x = shared.current_x.load(Ordering::Acquire);
-            let cur_y = shared.current_y.load(Ordering::Acquire);
-            shared.drag_start_win_x.store(cur_x, Ordering::Release);
-            shared.drag_start_win_y.store(cur_y, Ordering::Release);
+            shared
+                .drag_start_win_x
+                .store(shared.current_x.load(Ordering::Acquire), Ordering::Release);
+            shared
+                .drag_start_win_y
+                .store(shared.current_y.load(Ordering::Acquire), Ordering::Release);
             shared.r_is_down.store(true, Ordering::Release);
+            let _ = SetCapture(hwnd);
             LRESULT(0)
         }
         WM_RBUTTONUP => {
             let was_down = shared.r_is_down.swap(false, Ordering::AcqRel);
-            if shared.drag_active.swap(false, Ordering::AcqRel) {
+            let was_drag = shared.drag_active.swap(false, Ordering::AcqRel);
+            if was_down || was_drag {
                 let _ = ReleaseCapture();
-            } else if was_down {
+            }
+            if was_down && !was_drag {
                 let x = (lparam.0 & 0xFFFF) as i16 as i32;
                 let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
                 let _ = shared.event_tx.try_send(WindowEvent::RightClick { x, y });
             }
+            LRESULT(0)
+        }
+        WM_CAPTURECHANGED | WM_CANCELMODE => {
+            shared.r_is_down.store(false, Ordering::Release);
+            shared.drag_active.store(false, Ordering::Release);
+            shared.l_is_down.store(false, Ordering::Release);
             LRESULT(0)
         }
         WM_KEYDOWN => {
@@ -445,9 +528,19 @@ unsafe extern "system" fn notch_wnd_proc(
         WM_DPICHANGED => {
             let new_dpi = (wparam.0 & 0xFFFF) as u32;
             shared.current_dpi.store(new_dpi, Ordering::Release);
-            let _ = shared.event_tx.try_send(WindowEvent::DpiChanged { new_dpi });
+            let _ = shared
+                .event_tx
+                .try_send(WindowEvent::DpiChanged { new_dpi });
             let rect = &*(lparam.0 as *const RECT);
-            let _ = SetWindowPos(hwnd, HWND(std::ptr::null_mut()), rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOACTIVATE | SWP_NOZORDER);
+            let _ = SetWindowPos(
+                hwnd,
+                HWND(std::ptr::null_mut()),
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
             LRESULT(0)
         }
         WM_DISPLAYCHANGE => {
@@ -456,7 +549,9 @@ unsafe extern "system" fn notch_wnd_proc(
         }
         WM_ERASEBKGND => LRESULT(1),
         WM_PAINT => {
-            unsafe { let _ = windows::Win32::Graphics::Gdi::ValidateRect(hwnd, None); }
+            unsafe {
+                let _ = windows::Win32::Graphics::Gdi::ValidateRect(hwnd, None);
+            }
             LRESULT(0)
         }
         WM_DROPFILES_MSG => {
@@ -469,7 +564,9 @@ unsafe extern "system" fn notch_wnd_proc(
                     let written = DragQueryFileW(hdrop, i, Some(&mut buf));
                     if written > 0 {
                         let path_str = String::from_utf16_lossy(&buf[..written as usize]);
-                        let _ = shared.event_tx.try_send(WindowEvent::FileDropped(PathBuf::from(path_str)));
+                        let _ = shared
+                            .event_tx
+                            .try_send(WindowEvent::FileDropped(PathBuf::from(path_str)));
                     }
                 }
             }

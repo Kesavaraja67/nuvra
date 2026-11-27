@@ -129,7 +129,7 @@ pub fn draw_icon(
                     None,
                 );
             }
-            IconKind::Mic => {
+            IconKind::Mic | IconKind::MicMuted => {
                 let capsule = D2D1_ROUNDED_RECT {
                     rect: D2D_RECT_F {
                         left: top_left_x + 7.5 * scale,
@@ -165,6 +165,21 @@ pub fn draw_icon(
                     1.5 * scale,
                     None,
                 );
+                if kind == IconKind::MicMuted {
+                    rt.DrawLine(
+                        D2D_POINT_2F {
+                            x: top_left_x + 4.0 * scale,
+                            y: top_left_y + 16.5 * scale,
+                        },
+                        D2D_POINT_2F {
+                            x: top_left_x + 16.0 * scale,
+                            y: top_left_y + 3.5 * scale,
+                        },
+                        brush,
+                        1.75 * scale,
+                        None,
+                    );
+                }
             }
             IconKind::Bell | IconKind::BellUnread => {
                 draw_bell_svg(rt, center_x, center_y, brush, scale);

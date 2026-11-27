@@ -39,6 +39,7 @@ pub enum HoverAction {
 
 pub struct HoverStateMachine {
     state: HoverState,
+    pointer_inside: bool,
     has_button_down: bool,
     is_shelf_drag_active: bool,
 }
@@ -47,6 +48,7 @@ impl HoverStateMachine {
     pub fn new() -> Self {
         Self {
             state: HoverState::Collapsed,
+            pointer_inside: false,
             has_button_down: false,
             is_shelf_drag_active: false,
         }
@@ -56,15 +58,36 @@ impl HoverStateMachine {
         self.state
     }
 
-    pub fn set_button_down(&mut self, is_down: bool) {
+    pub fn set_button_down(&mut self, is_down: bool) -> HoverAction {
         self.has_button_down = is_down;
+        self.re_evaluate_collapse()
     }
 
-    pub fn set_shelf_drag(&mut self, is_active: bool) {
+    pub fn set_shelf_drag(&mut self, is_active: bool) -> HoverAction {
         self.is_shelf_drag_active = is_active;
+        self.re_evaluate_collapse()
+    }
+
+    fn re_evaluate_collapse(&mut self) -> HoverAction {
+        if self.state == HoverState::Expanded
+            && !self.pointer_inside
+            && !self.has_button_down
+            && !self.is_shelf_drag_active
+        {
+            self.state = HoverState::CollapsePending;
+            HoverAction::StartCollapseTimer
+        } else {
+            HoverAction::None
+        }
     }
 
     pub fn handle_event(&mut self, event: HoverEvent) -> HoverAction {
+        match event {
+            HoverEvent::PointerEnter => self.pointer_inside = true,
+            HoverEvent::PointerLeave => self.pointer_inside = false,
+            _ => {}
+        }
+
         match (self.state, event) {
             (HoverState::Collapsed, HoverEvent::PointerEnter) => {
                 self.state = HoverState::HoverPending;
@@ -79,8 +102,13 @@ impl HoverStateMachine {
                 HoverAction::CommitExpand
             }
             (HoverState::Expanding, HoverEvent::AnimationSettled) => {
-                self.state = HoverState::Expanded;
-                HoverAction::None
+                if !self.pointer_inside && !self.has_button_down && !self.is_shelf_drag_active {
+                    self.state = HoverState::CollapsePending;
+                    HoverAction::StartCollapseTimer
+                } else {
+                    self.state = HoverState::Expanded;
+                    HoverAction::None
+                }
             }
             (HoverState::Expanded, HoverEvent::PointerLeave) => {
                 if self.has_button_down || self.is_shelf_drag_active {
@@ -158,5 +186,45 @@ mod tests {
         let action = sm.handle_event(HoverEvent::AnimationSettled);
         assert_eq!(sm.state(), HoverState::Collapsed);
         assert_eq!(action, HoverAction::None);
+    }
+
+    #[test]
+    fn test_pointer_leave_during_expansion_and_inhibitor_release_collapse() {
+        let mut sm = HoverStateMachine::new();
+        assert_eq!(
+            sm.handle_event(HoverEvent::PointerEnter),
+            HoverAction::StartIntentTimer
+        );
+        assert_eq!(
+            sm.handle_event(HoverEvent::IntentTimerFired),
+            HoverAction::CommitExpand
+        );
+        assert_eq!(sm.handle_event(HoverEvent::PointerLeave), HoverAction::None);
+        assert_eq!(
+            sm.handle_event(HoverEvent::AnimationSettled),
+            HoverAction::StartCollapseTimer
+        );
+        assert_eq!(sm.state(), HoverState::CollapsePending);
+
+        // Re-enter while pending, hold button, leave outside, release button -> starts collapse
+        assert_eq!(
+            sm.handle_event(HoverEvent::PointerEnter),
+            HoverAction::CancelCollapseTimer
+        );
+        assert_eq!(sm.set_button_down(true), HoverAction::None);
+        assert_eq!(sm.handle_event(HoverEvent::PointerLeave), HoverAction::None);
+        assert_eq!(sm.state(), HoverState::Expanded);
+        assert_eq!(sm.set_button_down(false), HoverAction::StartCollapseTimer);
+        assert_eq!(sm.state(), HoverState::CollapsePending);
+
+        // Suppressed CollapseTimerFired during shelf drag resumes collapse when drag ends
+        assert_eq!(sm.set_shelf_drag(true), HoverAction::None);
+        assert_eq!(
+            sm.handle_event(HoverEvent::CollapseTimerFired),
+            HoverAction::None
+        );
+        assert_eq!(sm.state(), HoverState::Expanded);
+        assert_eq!(sm.set_shelf_drag(false), HoverAction::StartCollapseTimer);
+        assert_eq!(sm.state(), HoverState::CollapsePending);
     }
 }

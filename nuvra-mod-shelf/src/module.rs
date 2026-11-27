@@ -16,6 +16,7 @@ pub struct ShelfModule {
     store: ShelfStore,
     state: ShelfState,
     tx: Option<Sender<ModuleEvent>>,
+    pending_publish: bool,
 }
 
 impl ShelfModule {
@@ -24,15 +25,12 @@ impl ShelfModule {
             store: ShelfStore::new(),
             state: ShelfState::default(),
             tx: None,
+            pending_publish: false,
         }
     }
 
     pub fn store(&self) -> &ShelfStore {
         &self.store
-    }
-
-    pub fn store_mut(&mut self) -> &mut ShelfStore {
-        &mut self.store
     }
 
     /// Add a dropped file path to the shelf.
@@ -48,15 +46,40 @@ impl ShelfModule {
         self.refresh_state();
     }
 
+    /// Clear all staged items and synchronize state.
+    pub fn clear(&mut self) {
+        self.store.clear();
+        self.refresh_state();
+    }
+
+    /// Flush any deferred shelf state snapshot if the event channel had been full.
+    pub fn flush_pending_state(&mut self) -> bool {
+        if !self.pending_publish {
+            return true;
+        }
+        let Some(tx) = &self.tx else {
+            return false;
+        };
+        match tx.try_send(ModuleEvent {
+            module_id: self.id(),
+            state: ModuleState::Shelf(self.state.snapshot()),
+        }) {
+            Ok(()) => {
+                self.pending_publish = false;
+                true
+            }
+            Err(flume::TrySendError::Full(_)) => false,
+            Err(flume::TrySendError::Disconnected(_)) => {
+                self.pending_publish = false;
+                false
+            }
+        }
+    }
+
     fn refresh_state(&mut self) {
         self.state.item_count = self.store.len();
-
-        if let Some(tx) = &self.tx {
-            let _ = tx.try_send(ModuleEvent {
-                module_id: self.id(),
-                state: ModuleState::Shelf(self.state.snapshot()),
-            });
-        }
+        self.pending_publish = true;
+        let _ = self.flush_pending_state();
     }
 }
 
@@ -82,6 +105,7 @@ impl Module for ShelfModule {
     }
 
     fn on_event(&mut self, _event: OsEvent) -> Result<(), ModuleError> {
+        let _ = self.flush_pending_state();
         Ok(())
     }
 
@@ -122,5 +146,30 @@ mod tests {
         if let ModuleState::Shelf(snap) = evt.state {
             assert_eq!(snap.item_count, 0);
         }
+    }
+
+    #[test]
+    fn test_shelf_module_resends_latest_snapshot_when_channel_full() {
+        let mut module = ShelfModule::new();
+        let (tx, rx) = flume::bounded(1);
+        module.init(tx).expect("init failed"); // channel now full with initial 0
+
+        module.add_file(PathBuf::from("Cargo.toml")).expect("add");
+        module.remove_file(0);
+
+        // Drain stale initial event; trigger retry on tick
+        let _ = rx.try_recv().expect("initial event");
+        module
+            .on_event(OsEvent::TimerTick { timer_id: 1 })
+            .expect("tick");
+        let latest = rx.try_recv().expect("pending snapshot flushed");
+        assert!(matches!(latest.state, ModuleState::Shelf(ref s) if s.item_count == 0));
+
+        module.add_file(PathBuf::from("Cargo.toml")).expect("add2");
+        let _ = rx.try_recv();
+        module.clear();
+        assert_eq!(module.store().len(), 0);
+        let cleared = rx.try_recv().expect("clear event");
+        assert!(matches!(cleared.state, ModuleState::Shelf(ref s) if s.item_count == 0));
     }
 }

@@ -25,20 +25,77 @@ pub struct OsNotificationReader {
     stop: Arc<AtomicBool>,
 }
 
+fn resolve_permission_on_ui_thread() -> NotifPermission {
+    let Ok(listener) = UserNotificationListener::Current() else {
+        return NotifPermission::NeedsPackagedIdentityOrPermission;
+    };
+    let initial = listener.GetAccessStatus();
+    if should_request_access(&initial) {
+        let requested = listener
+            .RequestAccessAsync()
+            .ok()
+            .and_then(|op| op.get().ok());
+        classify_requested_access(requested)
+    } else {
+        classify_initial_access(initial.ok())
+    }
+}
+
+fn should_request_access(
+    status: &windows::core::Result<UserNotificationListenerAccessStatus>,
+) -> bool {
+    matches!(
+        status,
+        Ok(UserNotificationListenerAccessStatus::Unspecified)
+    )
+}
+
+fn classify_initial_access(
+    status: Option<UserNotificationListenerAccessStatus>,
+) -> NotifPermission {
+    if status == Some(UserNotificationListenerAccessStatus::Allowed) {
+        NotifPermission::Allowed
+    } else {
+        NotifPermission::NeedsPackagedIdentityOrPermission
+    }
+}
+
+fn classify_requested_access(
+    status: Option<UserNotificationListenerAccessStatus>,
+) -> NotifPermission {
+    if status == Some(UserNotificationListenerAccessStatus::Allowed) {
+        NotifPermission::Allowed
+    } else {
+        NotifPermission::NeedsPackagedIdentityOrPermission
+    }
+}
+
 impl OsNotificationReader {
+    /// Must be constructed on the UI thread so any first-run Unspecified access prompt is legal.
     pub fn new() -> Self {
-        let perm = Arc::new(Mutex::new(NotifPermission::Unknown));
+        let initial_perm = resolve_permission_on_ui_thread();
+        let perm = Arc::new(Mutex::new(initial_perm));
         let pending = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
-        let (p_ref, q_ref, s_ref) = (Arc::clone(&perm), Arc::clone(&pending), Arc::clone(&stop));
-        let _ = std::thread::Builder::new()
-            .name("nuvra-notif".into())
-            .spawn(move || listener_worker(p_ref, q_ref, s_ref));
-        Self { perm, pending, stop }
+        if initial_perm == NotifPermission::Allowed {
+            let (p_ref, q_ref, s_ref) =
+                (Arc::clone(&perm), Arc::clone(&pending), Arc::clone(&stop));
+            let _ = std::thread::Builder::new()
+                .name("nuvra-notif".into())
+                .spawn(move || listener_worker(p_ref, q_ref, s_ref));
+        }
+        Self {
+            perm,
+            pending,
+            stop,
+        }
     }
 
     pub fn permission_status(&self) -> NotifPermission {
-        self.perm.lock().map(|g| *g).unwrap_or(NotifPermission::Unknown)
+        self.perm
+            .lock()
+            .map(|g| *g)
+            .unwrap_or(NotifPermission::Unknown)
     }
 
     pub fn drain_new(&self) -> Vec<(String, String)> {
@@ -73,18 +130,11 @@ fn listener_worker(
         }
         return;
     };
-    let status = listener
-        .GetAccessStatus()
-        .ok()
-        .or_else(|| listener.RequestAccessAsync().ok().and_then(|op| op.get().ok()));
-    if status != Some(UserNotificationListenerAccessStatus::Allowed) {
+    if listener.GetAccessStatus().ok() != Some(UserNotificationListenerAccessStatus::Allowed) {
         if let Ok(mut p) = perm_ref.lock() {
             *p = NotifPermission::NeedsPackagedIdentityOrPermission;
         }
         return;
-    }
-    if let Ok(mut p) = perm_ref.lock() {
-        *p = NotifPermission::Allowed;
     }
     let mut seen_ids: HashSet<u32> = HashSet::new();
     let mut primed = false;
@@ -100,7 +150,9 @@ fn listener_worker(
 }
 
 fn collect_new(
-    list: &windows::Foundation::Collections::IVectorView<windows::UI::Notifications::UserNotification>,
+    list: &windows::Foundation::Collections::IVectorView<
+        windows::UI::Notifications::UserNotification,
+    >,
     seen: &mut HashSet<u32>,
     emit: bool,
     pending: &Arc<Mutex<Vec<(String, String)>>>,
@@ -147,5 +199,31 @@ fn collect_new(
                 q.push((app, summary));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notification_unspecified_triggers_request_and_classification() {
+        assert!(should_request_access(&Ok(
+            UserNotificationListenerAccessStatus::Unspecified
+        )));
+        assert!(!should_request_access(&Ok(
+            UserNotificationListenerAccessStatus::Allowed
+        )));
+        assert!(!should_request_access(&Ok(
+            UserNotificationListenerAccessStatus::Denied
+        )));
+        assert_eq!(
+            classify_requested_access(Some(UserNotificationListenerAccessStatus::Allowed)),
+            NotifPermission::Allowed
+        );
+        assert_eq!(
+            classify_requested_access(Some(UserNotificationListenerAccessStatus::Denied)),
+            NotifPermission::NeedsPackagedIdentityOrPermission
+        );
     }
 }

@@ -8,8 +8,9 @@ use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW, TrackPopupMenuEx, HMENU,
-    IDI_APPLICATION, MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RETURNCMD,
+    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW, SetForegroundWindow,
+    TrackPopupMenuEx, HMENU, IDI_APPLICATION, MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN,
+    TPM_LEFTALIGN, TPM_RETURNCMD,
 };
 
 pub const WM_TRAY_CALLBACK: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 101;
@@ -82,6 +83,7 @@ impl TrayIcon {
             let mut pt = POINT::default();
             let _ = GetCursorPos(&mut pt);
 
+            let _ = SetForegroundWindow(self.hwnd);
             let cmd = TrackPopupMenuEx(
                 menu,
                 TPM_RETURNCMD.0 | TPM_LEFTALIGN.0 | TPM_BOTTOMALIGN.0,

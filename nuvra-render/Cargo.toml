@@ -16,9 +16,9 @@ parking_lot.workspace = true
 flume.workspace     = true
 arc-swap.workspace  = true
 
-# [dev-dependencies]
-# criterion.workspace = true
+[dev-dependencies]
+criterion.workspace = true
 
-# [[bench]]
-# name    = "render_perf"
-# harness = false
+[[bench]]
+name    = "render_perf"
+harness = false

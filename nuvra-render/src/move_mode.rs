@@ -104,6 +104,7 @@ impl MoveModeController {
 
     /// Escape cancels drag and restores initial offset
     pub fn on_escape(&mut self) -> Option<MoveOffset> {
+        self.r_down_pos = None;
         if self.is_active() {
             self.state = MoveState::Inactive;
             self.current_offset = self.initial_offset;
@@ -115,6 +116,7 @@ impl MoveModeController {
 
     /// Enter drops in place
     pub fn on_enter(&mut self) {
+        self.r_down_pos = None;
         self.state = MoveState::Inactive;
     }
 
@@ -177,13 +179,17 @@ impl MoveModeController {
             self.is_snapped_y = false;
         }
 
-        // 3. Clamp within monitor bounds
+        // 3. Clamp within monitor bounds (guard against inverted bounds on constrained monitors)
         let min_x = monitor.left + half_width - mon_center;
         let max_x = monitor.right - half_width - mon_center;
         let min_y = 0.0;
-        let max_y = monitor.bottom - monitor.top - height;
+        let max_y = (monitor.bottom - monitor.top - height).max(min_y);
 
-        self.current_offset.x = raw_x.clamp(min_x, max_x);
+        self.current_offset.x = if min_x <= max_x {
+            raw_x.clamp(min_x, max_x)
+        } else {
+            (min_x + max_x) * 0.5
+        };
         self.current_offset.y = raw_y.clamp(min_y, max_y);
 
         (true, snap_flashed)
@@ -253,9 +259,32 @@ mod tests {
         assert!(flashed); // Snapped to top edge!
         assert_eq!(mc.current_offset().y, 0.0);
 
-        // Escape restores initial position (0, 0)
+        // Escape restores initial position (0, 0) and clears r_down_pos
+        mc.on_right_down(100.0, 100.0);
         let restored = mc.on_escape();
         assert_eq!(restored, Some(MoveOffset { x: 0.0, y: 0.0 }));
         assert_eq!(mc.state(), MoveState::Inactive);
+
+        // Pointer movement after Escape or Enter must NOT trigger HeldDrag without a new right-down
+        let (changed, _) = mc.on_pointer_move(120.0, 120.0, &mon, 190.0, 38.0);
+        assert!(!changed);
+        assert_eq!(mc.state(), MoveState::Inactive);
+
+        mc.on_right_down(100.0, 100.0);
+        mc.on_enter();
+        let (changed, _) = mc.on_pointer_move(120.0, 120.0, &mon, 190.0, 38.0);
+        assert!(!changed);
+
+        // Oversized geometry on a tiny monitor must not panic when clamping
+        let tiny = MonitorBounds {
+            left: 0.0,
+            top: 0.0,
+            right: 200.0,
+            bottom: 30.0,
+        };
+        mc.on_double_click(10.0, 10.0);
+        let (changed, _) = mc.on_pointer_move(500.0, 500.0, &tiny, 190.0, 50.0);
+        assert!(changed);
+        assert_eq!(mc.current_offset(), MoveOffset { x: 0.0, y: 0.0 });
     }
 }

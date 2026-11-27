@@ -27,8 +27,26 @@ impl NotificationsModule {
         }
     }
 
-    pub fn queue_mut(&mut self) -> &mut NotificationQueue {
-        &mut self.queue
+    pub fn queue(&self) -> &NotificationQueue {
+        &self.queue
+    }
+
+    pub fn set_dnd(&mut self, active: bool) {
+        self.queue.set_dnd(active);
+    }
+
+    pub fn block_app(&mut self, app_name: &str) {
+        self.queue.block_app(app_name);
+    }
+
+    pub fn unblock_app(&mut self, app_name: &str) {
+        self.queue.unblock_app(app_name);
+    }
+
+    /// Clear all queued notifications and publish the updated inactive state.
+    pub fn clear(&mut self) {
+        self.queue.clear();
+        self.refresh_state();
     }
 
     /// Push an incoming notification toast.
@@ -51,7 +69,7 @@ impl NotificationsModule {
         if let Some(item) = self.queue.peek() {
             self.state.app_name = item.app_name.clone();
             self.state.summary = item.summary.clone();
-            self.state.queued = self.queue.len() as u8;
+            self.state.queued = self.queue.len().saturating_sub(1) as u8;
         } else {
             self.state.app_name.clear();
             self.state.summary.clear();
@@ -119,6 +137,14 @@ mod tests {
         if let ModuleState::Notification(snap) = evt.state {
             assert_eq!(snap.app_name, "Outlook");
             assert_eq!(snap.summary, "New meeting invite");
+            assert_eq!(snap.queued, 0);
+        } else {
+            panic!("Expected Notification state");
+        }
+
+        assert!(module.push_toast("Slack".into(), "Ping".into()));
+        let evt = rx.try_recv().expect("second toast event");
+        if let ModuleState::Notification(snap) = evt.state {
             assert_eq!(snap.queued, 1);
         } else {
             panic!("Expected Notification state");
@@ -127,6 +153,14 @@ mod tests {
         module.dismiss_current();
         let evt = rx.try_recv().expect("event expected");
         if let ModuleState::Notification(snap) = evt.state {
+            assert_eq!(snap.app_name, "Slack");
+            assert_eq!(snap.queued, 0);
+        }
+
+        module.clear();
+        let evt = rx.try_recv().expect("clear event expected");
+        if let ModuleState::Notification(snap) = evt.state {
+            assert!(snap.app_name.is_empty());
             assert_eq!(snap.queued, 0);
         }
     }

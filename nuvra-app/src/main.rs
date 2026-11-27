@@ -3,8 +3,9 @@
 #![forbid(unsafe_code)]
 
 mod app_state;
+mod view_model;
 
-use app_state::{build_live_layout, make_vm, snap_strings, AppData};
+use app_state::AppData;
 use nuvra_core_shared::module::ModuleState;
 use nuvra_platform_win::clipboard::{init_com_sta, start_file_drag_drop};
 use nuvra_platform_win::dcomp::CompositionHost;
@@ -19,11 +20,15 @@ use nuvra_platform_win::window::{NotchWindow, WindowEvent};
 use nuvra_render::engine::{NotchEngine, Theme};
 use nuvra_render::tokens;
 use std::time::Instant;
+use view_model::{build_live_layout, make_vm, snap_strings};
 use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_CONTROL, VK_M, VK_N};
 
 fn main() {
     init_com_sta();
-    if std::env::var("NUVRA_RUN_SPIKE").map(|v| v.trim() == "1").unwrap_or(false) {
+    if std::env::var("NUVRA_RUN_SPIKE")
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false)
+    {
         if let Err(err) = nuvra_render::spike::run_spike() {
             eprintln!("Verification spike failed: {err}");
             std::process::exit(1);
@@ -41,25 +46,28 @@ fn main() {
     let init_x = monitor.left + (monitor.width() / 2) - (initial_w as i32) / 2;
     window.set_geometry(init_x, monitor.top, initial_w, initial_h);
 
-    let device_bundle = create_device_and_swapchain(window.hwnd(), initial_w, initial_h).unwrap_or_else(|e| {
-        eprintln!("D3D11/DXGI init failed: {e}");
-        std::process::exit(1);
-    });
-    let dcomp = CompositionHost::create_for_hwnd(window.hwnd(), &device_bundle.swapchain).unwrap_or_else(|e| {
-        eprintln!("DComp init failed: {e}");
-        std::process::exit(1);
-    });
+    let device_bundle = create_device_and_swapchain(window.hwnd(), initial_w, initial_h)
+        .unwrap_or_else(|e| {
+            eprintln!("D3D11/DXGI init failed: {e}");
+            std::process::exit(1);
+        });
+    let dcomp = CompositionHost::create_for_hwnd(window.hwnd(), &device_bundle.swapchain)
+        .unwrap_or_else(|e| {
+            eprintln!("DComp init failed: {e}");
+            std::process::exit(1);
+        });
     let mut renderer = ModularRenderer::new(&device_bundle.swapchain).unwrap_or_else(|e| {
         eprintln!("ModularRenderer init failed: {e}");
         std::process::exit(1);
     });
 
     let _hk_mute = HotKeyRegistration::register(window.hwnd(), 1, MOD_CONTROL | MOD_ALT, VK_M).ok();
-    let _hk_expand = HotKeyRegistration::register(window.hwnd(), 2, MOD_CONTROL | MOD_ALT, VK_N).ok();
+    let _hk_expand =
+        HotKeyRegistration::register(window.hwnd(), 2, MOD_CONTROL | MOD_ALT, VK_N).ok();
     let tray = TrayIcon::new(window.hwnd()).ok();
 
     let mut engine = NotchEngine::new(Theme::Obsidian);
-    let mut data = AppData::new();
+    let mut data = AppData::new(window.hwnd());
     let mut last_frame = Instant::now();
     let mut hover_enter_time: Option<Instant> = None;
     let mut hover_leave_time: Option<Instant> = None;
@@ -72,7 +80,9 @@ fn main() {
     let mut eq_phase: f32 = 0.0;
     let event_rx = window.event_receiver().clone();
     let module_state = ModuleState::Idle;
-    let test_run = std::env::var("NUVRA_TEST_ONESHOT").map(|v| v.trim() == "1").unwrap_or(false);
+    let test_run = std::env::var("NUVRA_TEST_ONESHOT")
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
 
     loop {
         if !window.pump_messages() {
@@ -89,10 +99,18 @@ fn main() {
                 WindowEvent::Click { x, y } => {
                     let snaps = snap_strings(&data);
                     let (_, layout) = build_live_layout(&data, &mut engine, &module_state, 0.0);
-                    let vm = make_vm(&data, &snaps, BatteryInfo::query(), window.hover_pos(), eq_phase);
+                    let vm = make_vm(
+                        &data,
+                        &snaps,
+                        BatteryInfo::query(),
+                        window.hover_pos(),
+                        eq_phase,
+                    );
 
                     if engine.is_expanded() || engine.is_banner() {
-                        if let Some(action) = renderer.handle_click(&layout, x as f32, y as f32, &vm) {
+                        if let Some(action) =
+                            renderer.handle_click(&layout, x as f32, y as f32, &vm)
+                        {
                             data.apply_action(action, &mut engine);
                         }
                     } else {
@@ -103,7 +121,13 @@ fn main() {
                 WindowEvent::DragStart { x, y } => {
                     if engine.is_expanded() {
                         let (_, layout) = build_live_layout(&data, &mut engine, &module_state, 0.0);
-                        if let Some(idx) = hit_test_shelf_drag(&layout, engine.active_drawer(), x as f32, y as f32, data.shelf_store.len()) {
+                        if let Some(idx) = hit_test_shelf_drag(
+                            &layout,
+                            engine.active_drawer(),
+                            x as f32,
+                            y as f32,
+                            data.shelf_store.len(),
+                        ) {
                             if let Some(item) = data.shelf_store.items().get(idx) {
                                 let _ = start_file_drag_drop(window.hwnd(), &item.path);
                             }
@@ -184,7 +208,12 @@ fn main() {
         }
 
         let is_fs = is_foreground_fullscreen();
-        if is_fs && !was_fullscreen && !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+        if is_fs
+            && !was_fullscreen
+            && !data.is_pinned
+            && !engine.is_vertical_expanded()
+            && engine.active_drawer().is_none()
+        {
             hover_enter_time = None;
             hover_leave_time = None;
             data.apply_action(RendererAction::CollapseNotch, &mut engine);
@@ -207,7 +236,8 @@ fn main() {
             }
         } else if !cursor_inside && was_cursor_inside {
             hover_enter_time = None;
-            if !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+            if !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none()
+            {
                 hover_leave_time = Some(Instant::now());
             }
         }
@@ -215,7 +245,9 @@ fn main() {
 
         let now_tick = Instant::now();
         if let Some(t) = hover_enter_time {
-            if now_tick.duration_since(t).as_millis() as u64 >= tokens::timing::HOVER_INTENT_DEFAULT_MS {
+            if now_tick.duration_since(t).as_millis() as u64
+                >= tokens::timing::HOVER_INTENT_DEFAULT_MS
+            {
                 hover_enter_time = None;
                 if cursor_inside && !engine.is_expanded() {
                     engine.set_hovered(true);
@@ -226,7 +258,11 @@ fn main() {
         if let Some(t) = hover_leave_time {
             if now_tick.duration_since(t).as_millis() as u64 >= tokens::timing::COLLAPSE_DELAY_MS {
                 hover_leave_time = None;
-                if !cursor_inside && !data.is_pinned && !engine.is_vertical_expanded() && engine.active_drawer().is_none() {
+                if !cursor_inside
+                    && !data.is_pinned
+                    && !engine.is_vertical_expanded()
+                    && engine.active_drawer().is_none()
+                {
                     engine.set_hovered(false);
                     engine.set_expanded(false);
                 }
@@ -240,7 +276,11 @@ fn main() {
             eq_phase += dt;
         }
 
-        let banner_active = data.banner_until.map(|t| Instant::now() < t).unwrap_or(false) && !data.dnd_active;
+        let banner_active = data
+            .banner_until
+            .map(|t| Instant::now() < t)
+            .unwrap_or(false)
+            && !data.dnd_active;
         engine.set_banner(banner_active);
         data.sync_system_theme(&mut engine);
 
@@ -264,9 +304,18 @@ fn main() {
         let _ = dcomp.commit();
 
         if test_run {
-            println!("Nuvra oneshot test run complete: frame width={}, height={}", frame.width, frame.height);
+            println!(
+                "Nuvra oneshot test run complete: frame width={}, height={}",
+                frame.width, frame.height
+            );
             break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(if frame.is_settled && !data.media_playing { 16 } else { 4 }));
+        std::thread::sleep(std::time::Duration::from_millis(
+            if frame.is_settled && !data.media_playing {
+                16
+            } else {
+                4
+            },
+        ));
     }
 }

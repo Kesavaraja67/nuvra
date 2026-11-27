@@ -67,7 +67,9 @@ fn loopback_worker(active: Arc<AtomicBool>, stop: Arc<AtomicBool>, ring: Arc<Mut
         if !active.load(Ordering::Acquire) {
             if let Some((ref ac, ..)) = client {
                 // SAFETY: Valid started IAudioClient stopped cleanly when playback pauses.
-                unsafe { let _ = ac.Stop(); }
+                unsafe {
+                    let _ = ac.Stop();
+                }
                 client = None;
             }
             std::thread::sleep(Duration::from_millis(80));
@@ -92,7 +94,8 @@ fn loopback_worker(active: Arc<AtomicBool>, stop: Arc<AtomicBool>, ring: Arc<Mut
 }
 
 unsafe fn open_loopback_client() -> Option<(IAudioClient, IAudioCaptureClient, usize, bool)> {
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
     let device: IMMDevice = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
     let audio_client: IAudioClient = device.Activate(CLSCTX_ALL, None).ok()?;
     let fmt_ptr: *mut WAVEFORMATEX = audio_client.GetMixFormat().ok()?;
@@ -115,20 +118,34 @@ unsafe fn open_loopback_client() -> Option<(IAudioClient, IAudioCaptureClient, u
     Some((audio_client, capture, channels, is_f32))
 }
 
-unsafe fn drain_packets(cap: &IAudioCaptureClient, channels: usize, is_f32: bool, ring: &Arc<Mutex<Vec<f32>>>) -> bool {
+unsafe fn drain_packets(
+    cap: &IAudioCaptureClient,
+    channels: usize,
+    is_f32: bool,
+    ring: &Arc<Mutex<Vec<f32>>>,
+) -> bool {
     loop {
-        let Ok(pkt_len) = cap.GetNextPacketSize() else { return false };
+        let Ok(pkt_len) = cap.GetNextPacketSize() else {
+            return false;
+        };
         if pkt_len == 0 {
             return true;
         }
         let mut data_ptr: *mut u8 = std::ptr::null_mut();
         let mut frames: u32 = 0;
         let mut flags: u32 = 0;
-        if cap.GetBuffer(&mut data_ptr, &mut frames, &mut flags, None, None).is_err() {
+        if cap
+            .GetBuffer(&mut data_ptr, &mut frames, &mut flags, None, None)
+            .is_err()
+        {
             return false;
         }
-        if frames > 0 && !data_ptr.is_null() && (flags & 0x2) == 0 {
-            push_mono_frames(data_ptr, frames as usize, channels, is_f32, ring);
+        if frames > 0 {
+            if (flags & 0x2) != 0 {
+                push_silence_frames(ring, frames as usize);
+            } else if !data_ptr.is_null() {
+                push_mono_frames(data_ptr, frames as usize, channels, is_f32, ring);
+            }
         }
         if cap.ReleaseBuffer(frames).is_err() {
             return false;
@@ -136,8 +153,38 @@ unsafe fn drain_packets(cap: &IAudioCaptureClient, channels: usize, is_f32: bool
     }
 }
 
-unsafe fn push_mono_frames(ptr: *const u8, frames: usize, ch: usize, is_f32: bool, ring: &Arc<Mutex<Vec<f32>>>) {
-    let mut batch = Vec::with_capacity(frames.min(RING_CAP));
+pub(crate) fn push_ring_samples(ring: &Arc<Mutex<Vec<f32>>>, samples: &[f32]) {
+    if samples.is_empty() {
+        return;
+    }
+    let tail = &samples[samples.len().saturating_sub(RING_CAP)..];
+    if let Ok(mut guard) = ring.lock() {
+        let keep = RING_CAP.saturating_sub(tail.len());
+        if keep < guard.len() {
+            let drain_n = guard.len() - keep;
+            guard.drain(..drain_n);
+        }
+        guard.extend_from_slice(tail);
+    }
+}
+
+pub(crate) fn push_silence_frames(ring: &Arc<Mutex<Vec<f32>>>, frames: usize) {
+    let count = frames.min(RING_CAP);
+    if count == 0 {
+        return;
+    }
+    let zeros = vec![0.0f32; count];
+    push_ring_samples(ring, &zeros);
+}
+
+unsafe fn push_mono_frames(
+    ptr: *const u8,
+    frames: usize,
+    ch: usize,
+    is_f32: bool,
+    ring: &Arc<Mutex<Vec<f32>>>,
+) {
+    let mut batch = Vec::with_capacity(frames);
     if is_f32 {
         let floats = std::slice::from_raw_parts(ptr.cast::<f32>(), frames * ch);
         for frame in floats.chunks_exact(ch) {
@@ -151,12 +198,29 @@ unsafe fn push_mono_frames(ptr: *const u8, frames: usize, ch: usize, is_f32: boo
             batch.push((sum / ch as f32).clamp(-1.0, 1.0));
         }
     }
-    if let Ok(mut guard) = ring.lock() {
-        let keep = RING_CAP.saturating_sub(batch.len());
-        if keep < guard.len() {
-            let drain_n = guard.len() - keep;
-            guard.drain(..drain_n);
+    push_ring_samples(ring, &batch);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ring_retains_newest_samples_and_appends_silence() {
+        let ring = Arc::new(Mutex::new(vec![0.5f32; RING_CAP]));
+        // Packet > RING_CAP retains the newest tail [1024..2048)
+        let pkt: Vec<f32> = (0..(RING_CAP * 2)).map(|i| i as f32).collect();
+        push_ring_samples(&ring, &pkt);
+        {
+            let guard = ring.lock().expect("lock");
+            assert_eq!(guard.len(), RING_CAP);
+            assert_eq!(guard[0], RING_CAP as f32);
+            assert_eq!(guard[RING_CAP - 1], (RING_CAP * 2 - 1) as f32);
         }
-        guard.extend(batch.into_iter().take(RING_CAP));
+
+        // Silent packet >= RING_CAP replaces all samples with zeros
+        push_silence_frames(&ring, RING_CAP);
+        let guard = ring.lock().expect("lock");
+        assert!(guard.iter().all(|&s| s == 0.0));
     }
 }

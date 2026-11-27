@@ -233,13 +233,22 @@ impl NotchEngine {
     /// Advance the simulation and compute the current visual frame.
     pub fn update(&mut self, _active_module: &ModuleState, dt: f32) -> FrameDescriptor {
         let (target_w, target_h) = if self.is_vertical_expanded || self.active_drawer.is_some() {
-            (tokens::window::EXPANDED_WIDTH, tokens::window::EXPANDED_HEIGHT)
+            (
+                tokens::window::EXPANDED_WIDTH,
+                tokens::window::EXPANDED_HEIGHT,
+            )
         } else if self.is_expanded || self.is_hovered {
-            (tokens::window::EXPANDED_WIDTH, tokens::window::EXPANDED_TOOLBAR_HEIGHT)
+            (
+                tokens::window::EXPANDED_WIDTH,
+                tokens::window::EXPANDED_TOOLBAR_HEIGHT,
+            )
         } else if self.is_banner {
             (tokens::window::BANNER_WIDTH, tokens::window::BANNER_HEIGHT)
         } else {
-            (tokens::window::COLLAPSED_WIDTH, tokens::window::COLLAPSED_HEIGHT)
+            (
+                tokens::window::COLLAPSED_WIDTH,
+                tokens::window::COLLAPSED_HEIGHT,
+            )
         };
 
         self.animator.set_targets(target_w, target_h);
@@ -273,7 +282,10 @@ mod tests {
     #[test]
     fn test_banner_state_and_signal_theme() {
         let mut engine = NotchEngine::new(Theme::Signal);
-        assert_eq!(engine.update(&ModuleState::Idle, 0.016).active_state, NotchState::Collapsed);
+        assert_eq!(
+            engine.update(&ModuleState::Idle, 0.016).active_state,
+            NotchState::Collapsed
+        );
         engine.set_banner(true);
         let mut state = NotchState::Collapsed;
         for _ in 0..30 {

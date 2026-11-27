@@ -6,10 +6,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   navItems.forEach((item) => {
     item.addEventListener("click", () => {
-      navItems.forEach((n) => n.classList.remove("active"));
+      navItems.forEach((n) => {
+        n.classList.remove("active");
+        n.removeAttribute("aria-current");
+      });
       tabPanels.forEach((p) => p.classList.remove("active"));
 
       item.classList.add("active");
+      item.setAttribute("aria-current", "page");
       const tabId = `tab-${item.getAttribute("data-tab")}`;
       const targetPanel = document.getElementById(tabId);
       if (targetPanel) {

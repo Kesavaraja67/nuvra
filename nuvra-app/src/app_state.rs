@@ -3,7 +3,6 @@
 // R-13: Pure safe Rust (crate root enforces #![forbid(unsafe_code)]).
 
 use nuvra_core_shared::i18n::{keys, FluentCatalog};
-use nuvra_core_shared::module::ModuleState;
 use nuvra_mod_clipboard::exclusions::is_excluded;
 use nuvra_mod_clipboard::history::ClipboardHistoryStore;
 use nuvra_mod_media::gsmtc::GsmtcController;
@@ -18,24 +17,24 @@ use nuvra_platform_win::audio::{
 use nuvra_platform_win::audio_loopback::LoopbackCapture;
 use nuvra_platform_win::camera::CameraMonitor;
 use nuvra_platform_win::clipboard::{
-    get_clipboard_sequence, read_clipboard_text, write_clipboard_files, write_clipboard_text,
+    get_clipboard_sequence, try_read_clipboard_text, write_clipboard_files, write_clipboard_text,
+    ClipboardReadResult,
 };
-use nuvra_platform_win::draw::{RenderViewModel, RendererAction};
+use nuvra_platform_win::draw::RendererAction;
 use nuvra_platform_win::foreground::{
     get_foreground_window_class, is_dnd_active, list_visible_window_titles,
 };
 use nuvra_platform_win::network::{query_active_network, NetworkKind};
 use nuvra_platform_win::notifications::{NotifPermission, OsNotificationReader};
-use nuvra_platform_win::power::BatteryInfo;
 use nuvra_platform_win::shell_ops::{compress_to_zip, reveal_in_explorer};
 use nuvra_platform_win::theme_sync::{
     is_high_contrast, is_startup_enabled, is_system_dark_mode, set_startup_enabled,
 };
-use nuvra_render::engine::{FrameDescriptor, GlassStyle, NotchEngine, Theme};
-use nuvra_render::layout::{compute_layout, Layout, LayoutState};
-use nuvra_render::spring::NotchState;
+use nuvra_render::engine::{GlassStyle, NotchEngine, Theme};
 use nuvra_render::tokens;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use windows::Win32::Foundation::HWND;
 
 pub(crate) struct AppData {
     pub gsmtc: GsmtcController,
@@ -68,7 +67,13 @@ pub(crate) struct AppData {
     pub startup_enabled: bool,
     pub clip_store: ClipboardHistoryStore,
     pub last_clip_seq: u32,
+    pub clip_retry_seq: u32,
+    pub clip_retry_count: u8,
+    pub owner_hwnd: HWND,
     pub shelf_store: ShelfStore,
+    pub zip_tx: flume::Sender<Result<PathBuf, String>>,
+    pub zip_rx: flume::Receiver<Result<PathBuf, String>>,
+    pub zip_in_flight: bool,
     pub notif_queue: NotificationQueue,
     pub banner_until: Option<Instant>,
     pub copied_flash_until: Option<Instant>,
@@ -77,23 +82,30 @@ pub(crate) struct AppData {
 }
 
 impl AppData {
-    pub fn new() -> Self {
+    pub fn new(owner_hwnd: HWND) -> Self {
         let fluent = FluentCatalog::en_us();
         let mut clip_store = ClipboardHistoryStore::new(50);
         let last_clip_seq = get_clipboard_sequence();
         let fg_class = get_foreground_window_class();
         if !fg_class.as_deref().is_some_and(is_excluded) {
-            if let Some(txt) = read_clipboard_text() {
+            if let ClipboardReadResult::Text(txt) = try_read_clipboard_text() {
                 clip_store.add(txt);
             }
         }
         let mut notif_queue = NotificationQueue::new(10);
         let os_notifs = OsNotificationReader::new();
         if os_notifs.permission_status() == NotifPermission::NeedsPackagedIdentityOrPermission {
-            notif_queue.push(fluent.get(keys::APP_NAME), fluent.get(keys::NOTIFICATIONS_DENIED_HELP));
+            notif_queue.push(
+                fluent.get(keys::APP_NAME),
+                fluent.get(keys::NOTIFICATIONS_DENIED_HELP),
+            );
         } else {
-            notif_queue.push(fluent.get(keys::APP_NAME), "Double-tap or Ctrl+Alt+N to expand workspace".into());
+            notif_queue.push(
+                fluent.get(keys::APP_NAME),
+                "Double-tap or Ctrl+Alt+N to expand workspace".into(),
+            );
         }
+        let (zip_tx, zip_rx) = flume::bounded(4);
 
         let mut me = Self {
             gsmtc: GsmtcController::new(),
@@ -126,7 +138,13 @@ impl AppData {
             startup_enabled: is_startup_enabled(),
             clip_store,
             last_clip_seq,
+            clip_retry_seq: 0,
+            clip_retry_count: 0,
+            owner_hwnd,
             shelf_store: ShelfStore::new(),
+            zip_tx,
+            zip_rx,
+            zip_in_flight: false,
             notif_queue,
             banner_until: None,
             copied_flash_until: None,
@@ -138,6 +156,7 @@ impl AppData {
     }
 
     pub fn poll_os_state(&mut self) {
+        self.poll_zip_results();
         self.poll_clipboard();
         if self.has_os_media && self.media_playing {
             self.loopback.copy_latest_samples(&mut self.pcm_scratch);
@@ -159,10 +178,36 @@ impl AppData {
         }
         self.network = query_active_network();
         self.dnd_active = is_dnd_active();
-        self.camera_active = self.camera.as_ref().is_some_and(CameraMonitor::is_camera_active);
-        self.call_active = self.mic_active && list_visible_window_titles().iter().any(|t| self.call_detector.is_meeting_window_title(t));
+        self.camera_active = self
+            .camera
+            .as_ref()
+            .is_some_and(CameraMonitor::is_camera_active);
+        self.call_active = self.mic_active
+            && list_visible_window_titles()
+                .iter()
+                .any(|t| self.call_detector.is_meeting_window_title(t));
         self.poll_notifications();
         self.poll_media_state();
+    }
+
+    fn poll_zip_results(&mut self) {
+        while let Ok(res) = self.zip_rx.try_recv() {
+            self.zip_in_flight = false;
+            match res {
+                Ok(zip) => {
+                    let _ = self.shelf_store.add_path(zip);
+                    self.copied_flash_until = Some(Instant::now() + Duration::from_millis(1400));
+                }
+                Err(err_msg) => {
+                    if self.notif_queue.push("Nuvra Shelf".into(), err_msg) {
+                        self.banner_until = Some(
+                            Instant::now()
+                                + Duration::from_millis(tokens::timing::BANNER_DURATION_MS),
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn poll_clipboard(&mut self) {
@@ -170,12 +215,41 @@ impl AppData {
         if seq == self.last_clip_seq {
             return;
         }
-        self.last_clip_seq = seq;
-        if get_foreground_window_class().as_deref().is_some_and(is_excluded) {
+        if get_foreground_window_class()
+            .as_deref()
+            .is_some_and(is_excluded)
+        {
+            self.last_clip_seq = seq;
+            self.clip_retry_count = 0;
             return;
         }
-        if let Some(txt) = read_clipboard_text() {
-            self.clip_store.add(txt);
+        let outcome = try_read_clipboard_text();
+        self.apply_clipboard_outcome(seq, outcome);
+    }
+
+    pub(crate) fn apply_clipboard_outcome(&mut self, seq: u32, outcome: ClipboardReadResult) {
+        match outcome {
+            ClipboardReadResult::Text(txt) => {
+                self.last_clip_seq = seq;
+                self.clip_retry_count = 0;
+                self.clip_store.add(txt);
+            }
+            ClipboardReadResult::NonText => {
+                self.last_clip_seq = seq;
+                self.clip_retry_count = 0;
+            }
+            ClipboardReadResult::OpenFailed => {
+                if self.clip_retry_seq == seq {
+                    self.clip_retry_count = self.clip_retry_count.saturating_add(1);
+                } else {
+                    self.clip_retry_seq = seq;
+                    self.clip_retry_count = 1;
+                }
+                if self.clip_retry_count >= 5 {
+                    self.last_clip_seq = seq;
+                    self.clip_retry_count = 0;
+                }
+            }
         }
     }
 
@@ -183,19 +257,28 @@ impl AppData {
         self.notif_queue.set_dnd(self.dnd_active);
         for (app, summary) in self.os_notifs.drain_new() {
             if self.notif_queue.push(app, summary) {
-                self.banner_until = Some(Instant::now() + Duration::from_millis(tokens::timing::BANNER_DURATION_MS));
+                self.banner_until = Some(
+                    Instant::now() + Duration::from_millis(tokens::timing::BANNER_DURATION_MS),
+                );
             }
         }
     }
 
     fn poll_media_state(&mut self) {
         if let Some(snap) = self.gsmtc.query_current_session() {
-            if snap.is_playing && !snap.title.is_empty() {
+            if !snap.title.is_empty() {
                 self.has_os_media = true;
-                self.media_playing = true;
-                self.loopback.set_active(true);
+                self.media_playing = snap.is_playing;
+                self.loopback.set_active(snap.is_playing);
+                if !snap.is_playing {
+                    self.fft_bands = [0.0; 8];
+                }
                 self.track_title = snap.title;
-                self.track_artist = if snap.artist.is_empty() { "Windows Media".into() } else { snap.artist };
+                self.track_artist = if snap.artist.is_empty() {
+                    "Windows Media".into()
+                } else {
+                    snap.artist
+                };
                 self.media_position_s = snap.position_s;
                 self.media_duration_s = snap.duration_s;
                 if snap.duration_s > 0.0 {
@@ -209,7 +292,11 @@ impl AppData {
                     );
                 } else {
                     self.media_progress = 0.0;
-                    self.media_time_label = "Playing".into();
+                    self.media_time_label = if snap.is_playing {
+                        "Playing".into()
+                    } else {
+                        "Paused".into()
+                    };
                 }
                 self.lyric_line = self
                     .lyrics_cache
@@ -237,21 +324,31 @@ impl AppData {
         }
         if self.follow_system_theme {
             self.is_dark_theme = is_system_dark_mode();
-            engine.set_theme(if self.is_dark_theme { Theme::Obsidian } else { Theme::Paper });
+            engine.set_theme(if self.is_dark_theme {
+                Theme::Obsidian
+            } else {
+                Theme::Paper
+            });
         }
     }
 
     fn apply_media_or_audio_action(&mut self, action: RendererAction) {
         match action {
             RendererAction::MediaPlayPause => {
-                if self.has_os_media { let _ = self.gsmtc.toggle_play_pause(); }
-                self.media_playing = !self.media_playing;
+                if self.has_os_media && self.gsmtc.toggle_play_pause() {
+                    self.media_playing = !self.media_playing;
+                    self.loopback.set_active(self.media_playing);
+                }
             }
             RendererAction::MediaNext => {
-                if !self.has_os_media || !self.gsmtc.next_track() { self.media_progress = 0.05; }
+                if !self.has_os_media || !self.gsmtc.next_track() {
+                    self.media_progress = 0.05;
+                }
             }
             RendererAction::MediaPrev => {
-                if !self.has_os_media || !self.gsmtc.previous_track() { self.media_progress = 0.05; }
+                if !self.has_os_media || !self.gsmtc.previous_track() {
+                    self.media_progress = 0.05;
+                }
             }
             RendererAction::MediaSeekPct(pct) => {
                 if self.has_os_media && self.media_duration_s > 0.0 {
@@ -261,9 +358,13 @@ impl AppData {
                 }
             }
             RendererAction::ToggleMute => {
-                self.mic_active = !toggle_microphone_mute().unwrap_or(self.mic_active);
+                self.mic_active = toggle_microphone_mute()
+                    .map(|muted| !muted)
+                    .unwrap_or(self.mic_active);
             }
-            RendererAction::VolumeDown | RendererAction::VolumeUp | RendererAction::SetVolume(_) => {
+            RendererAction::VolumeDown
+            | RendererAction::VolumeUp
+            | RendererAction::SetVolume(_) => {
                 let target = match action {
                     RendererAction::VolumeDown => self.volume_norm - 0.05,
                     RendererAction::VolumeUp => self.volume_norm + 0.05,
@@ -271,7 +372,9 @@ impl AppData {
                     _ => self.volume_norm,
                 }
                 .clamp(0.0, 1.0);
-                if set_master_volume(target).is_ok() { self.volume_norm = target; }
+                if set_master_volume(target).is_ok() {
+                    self.volume_norm = target;
+                }
             }
             _ => {}
         }
@@ -281,56 +384,105 @@ impl AppData {
         match action {
             RendererAction::CopyClipItem(idx) => {
                 if let Some(entry) = self.clip_store.search("").get(idx) {
-                    if write_clipboard_text(&entry.content) {
+                    if write_clipboard_text(self.owner_hwnd, &entry.content) {
                         self.last_clip_seq = get_clipboard_sequence();
-                        self.copied_flash_until = Some(Instant::now() + Duration::from_millis(1400));
+                        self.copied_flash_until =
+                            Some(Instant::now() + Duration::from_millis(1400));
                     }
                 }
             }
             RendererAction::ToggleClipPin(idx) => {
-                if let Some((id, pinned)) = self.clip_store.search("").get(idx).map(|e| (e.id, e.is_pinned)) {
+                if let Some((id, pinned)) = self
+                    .clip_store
+                    .search("")
+                    .get(idx)
+                    .map(|e| (e.id, e.is_pinned))
+                {
                     self.clip_store.set_pinned(id, !pinned);
                 }
             }
             RendererAction::ClearClipboard => self.clip_store.wipe_unpinned(),
             RendererAction::CopyShelfItem(idx) => {
                 if let Some(item) = self.shelf_store.items().get(idx) {
-                    if write_clipboard_files(std::slice::from_ref(&item.path)) {
+                    if write_clipboard_files(self.owner_hwnd, std::slice::from_ref(&item.path)) {
                         self.last_clip_seq = get_clipboard_sequence();
-                        self.copied_flash_until = Some(Instant::now() + Duration::from_millis(1400));
+                        self.copied_flash_until =
+                            Some(Instant::now() + Duration::from_millis(1400));
                     }
                 }
             }
             RendererAction::CopyShelfPath(idx) => {
                 if let Some(item) = self.shelf_store.items().get(idx) {
-                    if write_clipboard_text(&item.path.to_string_lossy()) {
+                    if write_clipboard_text(self.owner_hwnd, &item.path.to_string_lossy()) {
                         self.last_clip_seq = get_clipboard_sequence();
-                        self.copied_flash_until = Some(Instant::now() + Duration::from_millis(1400));
+                        self.copied_flash_until =
+                            Some(Instant::now() + Duration::from_millis(1400));
                     }
                 }
             }
             RendererAction::RevealShelfItem(idx) => {
-                if let Some(item) = self.shelf_store.items().get(idx) { let _ = reveal_in_explorer(&item.path); }
-            }
-            RendererAction::ZipShelfItems => {
-                let paths: Vec<_> = self.shelf_store.items().iter().map(|i| i.path.clone()).collect();
-                if let Ok(zip) = compress_to_zip(&paths) {
-                    let _ = self.shelf_store.add_path(zip);
-                    self.copied_flash_until = Some(Instant::now() + Duration::from_millis(1400));
+                if let Some(item) = self.shelf_store.items().get(idx) {
+                    let _ = reveal_in_explorer(&item.path);
                 }
             }
-            RendererAction::RemoveShelfItem(idx) => { let _ = self.shelf_store.remove_at(idx); }
+            RendererAction::ZipShelfItems => {
+                if self.zip_in_flight || self.shelf_store.is_empty() {
+                    return;
+                }
+                let paths: Vec<_> = self
+                    .shelf_store
+                    .items()
+                    .iter()
+                    .map(|i| i.path.clone())
+                    .collect();
+                let tx = self.zip_tx.clone();
+                self.zip_in_flight = true;
+                if std::thread::Builder::new()
+                    .name("nuvra-zip".into())
+                    .spawn(move || {
+                        let _ = tx.send(compress_to_zip(&paths));
+                    })
+                    .is_err()
+                {
+                    self.zip_in_flight = false;
+                }
+            }
+            RendererAction::RemoveShelfItem(idx) => {
+                let _ = self.shelf_store.remove_at(idx);
+            }
             RendererAction::ClearShelf => self.shelf_store.clear(),
             _ => {}
         }
     }
 
     pub fn apply_action(&mut self, action: RendererAction, engine: &mut NotchEngine) {
-        self.is_pinned = true;
+        if !matches!(
+            action,
+            RendererAction::ToggleMute
+                | RendererAction::CollapseNotch
+                | RendererAction::DismissBanner
+        ) {
+            self.is_pinned = true;
+        }
         match action {
             RendererAction::ToggleDrawer(d) => engine.toggle_drawer(d),
-            RendererAction::MediaPlayPause | RendererAction::MediaNext | RendererAction::MediaPrev | RendererAction::MediaSeekPct(_) | RendererAction::ToggleMute | RendererAction::VolumeDown | RendererAction::VolumeUp | RendererAction::SetVolume(_) => self.apply_media_or_audio_action(action),
-            RendererAction::CopyClipItem(_) | RendererAction::ToggleClipPin(_) | RendererAction::ClearClipboard | RendererAction::CopyShelfItem(_) | RendererAction::CopyShelfPath(_) | RendererAction::RevealShelfItem(_) | RendererAction::ZipShelfItems | RendererAction::RemoveShelfItem(_) | RendererAction::ClearShelf => self.apply_shelf_or_clip_action(action),
+            RendererAction::MediaPlayPause
+            | RendererAction::MediaNext
+            | RendererAction::MediaPrev
+            | RendererAction::MediaSeekPct(_)
+            | RendererAction::ToggleMute
+            | RendererAction::VolumeDown
+            | RendererAction::VolumeUp
+            | RendererAction::SetVolume(_) => self.apply_media_or_audio_action(action),
+            RendererAction::CopyClipItem(_)
+            | RendererAction::ToggleClipPin(_)
+            | RendererAction::ClearClipboard
+            | RendererAction::CopyShelfItem(_)
+            | RendererAction::CopyShelfPath(_)
+            | RendererAction::RevealShelfItem(_)
+            | RendererAction::ZipShelfItems
+            | RendererAction::RemoveShelfItem(_)
+            | RendererAction::ClearShelf => self.apply_shelf_or_clip_action(action),
             RendererAction::CollapseNotch => {
                 engine.set_active_drawer(None);
                 engine.set_vertical_expanded(false);
@@ -350,7 +502,11 @@ impl AppData {
             }
             RendererAction::ClearNotifications => self.notif_queue.clear(),
             RendererAction::CycleGlassStyle(m) => {
-                self.glass_style = match m { 1 => GlassStyle::Clear, 2 => GlassStyle::Matte, _ => GlassStyle::Frosted };
+                self.glass_style = match m {
+                    1 => GlassStyle::Clear,
+                    2 => GlassStyle::Matte,
+                    _ => GlassStyle::Frosted,
+                };
             }
             RendererAction::ToggleTheme(dark) => {
                 self.follow_system_theme = false;
@@ -358,7 +514,9 @@ impl AppData {
                 engine.set_theme(if dark { Theme::Obsidian } else { Theme::Paper });
             }
             RendererAction::ToggleStartup(en) => {
-                if set_startup_enabled(en) { self.startup_enabled = en; }
+                if set_startup_enabled(en) {
+                    self.startup_enabled = en;
+                }
             }
             RendererAction::ToggleFollowSystemTheme(follow) => {
                 self.follow_system_theme = follow;
@@ -368,84 +526,36 @@ impl AppData {
     }
 }
 
-pub(crate) struct UiSnapshots {
-    pub clips: Vec<String>,
-    pub clip_pinned: Vec<bool>,
-    pub shelf: Vec<String>,
-    pub notifs: Vec<(String, String)>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::Foundation::HWND;
 
-pub(crate) fn snap_strings(data: &AppData) -> UiSnapshots {
-    let entries = data.clip_store.search("");
-    let clips = entries.iter().take(4).map(|e| e.content.clone()).collect();
-    let clip_pinned = entries.iter().take(4).map(|e| e.is_pinned).collect();
-    let shelf = data.shelf_store.items().iter().take(4).map(|i| i.name.clone()).collect();
-    let notifs = data.notif_queue.peek().map(|t| vec![(t.app_name.clone(), t.summary.clone())]).unwrap_or_default();
-    UiSnapshots { clips, clip_pinned, shelf, notifs }
-}
+    #[test]
+    fn test_clipboard_retry_vs_permanent_nontext() {
+        let mut data = AppData::new(HWND(std::ptr::null_mut()));
+        let seq0 = data.last_clip_seq;
+        let next = seq0.wrapping_add(1);
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn make_vm<'a>(
-    data: &'a AppData,
-    snaps: &'a UiSnapshots,
-    battery: BatteryInfo,
-    hover_pos: Option<(f32, f32)>,
-    eq_phase: f32,
-) -> RenderViewModel<'a> {
-    RenderViewModel {
-        media_active: data.has_os_media && data.media_playing,
-        media_playing: data.media_playing,
-        track_title: &data.track_title,
-        track_artist: &data.track_artist,
-        media_progress: data.media_progress,
-        media_time_label: &data.media_time_label,
-        fft_bands: &data.fft_bands,
-        lyric_line: data.lyric_line.as_deref(),
-        mic_active: data.mic_active,
-        call_active: data.call_active,
-        camera_active: data.camera_active,
-        dnd_active: data.dnd_active,
-        unread_notifications: data.notif_queue.len() as u32,
-        battery_pct: battery.percentage,
-        battery_charging: battery.is_charging,
-        volume_pct: (data.volume_norm * 100.0).round().clamp(0.0, 100.0) as u32,
-        network: data.network,
-        glass_style: data.glass_style,
-        is_dark_theme: data.is_dark_theme,
-        startup_enabled: data.startup_enabled,
-        follow_system_theme: data.follow_system_theme,
-        clipboard_items: &snaps.clips,
-        clip_pinned: &snaps.clip_pinned,
-        shelf_items: &snaps.shelf,
-        notifications: &snaps.notifs,
-        hover_pos,
-        copied_flash: data.copied_flash_until.map(|t| Instant::now() < t).unwrap_or(false),
-        eq_phase,
+        data.apply_clipboard_outcome(next, ClipboardReadResult::OpenFailed);
+        assert_eq!(data.last_clip_seq, seq0);
+        assert_eq!(data.clip_retry_count, 1);
+
+        data.apply_clipboard_outcome(next, ClipboardReadResult::Text("hello".into()));
+        assert_eq!(data.last_clip_seq, next);
+        assert_eq!(data.clip_retry_count, 0);
+
+        let img_seq = next.wrapping_add(1);
+        data.apply_clipboard_outcome(img_seq, ClipboardReadResult::NonText);
+        assert_eq!(data.last_clip_seq, img_seq);
     }
-}
 
-pub(crate) fn build_live_layout(
-    data: &AppData,
-    engine: &mut NotchEngine,
-    module_state: &ModuleState,
-    dt: f32,
-) -> (FrameDescriptor, Layout) {
-    let frame = engine.update(module_state, dt);
-    let lstate = match frame.active_state {
-        NotchState::Collapsed => LayoutState::Collapsed,
-        NotchState::Expanded => LayoutState::Expanded,
-        NotchState::Banner => LayoutState::Banner,
-    };
-    let media_active = data.has_os_media && data.media_playing;
-    let mut layout = compute_layout(
-        lstate,
-        1.0,
-        149.0,
-        media_active,
-        data.notif_queue.len() as u32,
-        engine.active_drawer().map(|_| tokens::window::DRAWER_MIN_HEIGHT),
-    );
-    layout.body.right = layout.body.left + frame.width;
-    layout.body.bottom = layout.body.top + frame.height;
-    (frame, layout)
+    #[test]
+    fn test_toggle_mute_action_preserves_pin_state() {
+        let mut data = AppData::new(HWND(std::ptr::null_mut()));
+        let mut engine = NotchEngine::new(Theme::Obsidian);
+        assert!(!data.is_pinned);
+        data.apply_action(RendererAction::ToggleMute, &mut engine);
+        assert!(!data.is_pinned);
+    }
 }

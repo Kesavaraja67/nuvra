@@ -46,18 +46,45 @@ pub fn draw_banner(
                 let cx = (item.visual_rect.left + item.visual_rect.right) / 2.0;
                 let cy = (item.visual_rect.top + item.visual_rect.bottom) / 2.0;
                 draw_bell_svg(rt, cx, cy, &b.text_primary, 0.9 * s);
-                let dot = D2D1_ELLIPSE { point: D2D_POINT_2F { x: cx + 5.5 * s, y: cy - 5.0 * s }, radiusX: 2.3 * s, radiusY: 2.3 * s };
+                let dot = D2D1_ELLIPSE {
+                    point: D2D_POINT_2F {
+                        x: cx + 5.5 * s,
+                        y: cy - 5.0 * s,
+                    },
+                    radiusX: 2.3 * s,
+                    radiusY: 2.3 * s,
+                };
                 // SAFETY: Drawing indicator dot on banner bell icon.
-                unsafe { rt.FillEllipse(&dot, &b.ok); }
+                unsafe {
+                    rt.FillEllipse(&dot, &b.ok);
+                }
             }
             ItemId::BannerText => {
                 let mid = (item.visual_rect.top + item.visual_rect.bottom) / 2.0;
-                draw_text(rt, app, &f.title, &b.text_primary, &D2D_RECT_F {
-                    left: item.visual_rect.left, top: item.visual_rect.top, right: item.visual_rect.right, bottom: mid + 1.0 * s,
-                });
-                draw_text(rt, summary, &f.caption, &b.text_secondary, &D2D_RECT_F {
-                    left: item.visual_rect.left, top: mid - 1.0 * s, right: item.visual_rect.right, bottom: item.visual_rect.bottom,
-                });
+                draw_text(
+                    rt,
+                    app,
+                    &f.title,
+                    &b.text_primary,
+                    &D2D_RECT_F {
+                        left: item.visual_rect.left,
+                        top: item.visual_rect.top,
+                        right: item.visual_rect.right,
+                        bottom: mid + 1.0 * s,
+                    },
+                );
+                draw_text(
+                    rt,
+                    summary,
+                    &f.caption,
+                    &b.text_secondary,
+                    &D2D_RECT_F {
+                        left: item.visual_rect.left,
+                        top: mid - 1.0 * s,
+                        right: item.visual_rect.right,
+                        bottom: item.visual_rect.bottom,
+                    },
+                );
             }
             ItemId::BannerClose => {
                 let plate = D2D1_ROUNDED_RECT {

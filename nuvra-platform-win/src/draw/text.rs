@@ -12,9 +12,9 @@ use windows::Win32::Graphics::DirectWrite::{
     IDWriteFactory, IDWriteInlineObject, IDWriteTextFormat, DWRITE_FONT_STRETCH_NORMAL,
     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_MEDIUM,
     DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_MEASURING_MODE_NATURAL,
-    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
-    DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TRIMMING,
-    DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP,
+    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING,
+    DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+    DWRITE_WORD_WRAPPING_NO_WRAP,
 };
 
 use super::{DrawBrushes, TextFormats};
@@ -77,8 +77,26 @@ unsafe fn make_fmt(
     no_wrap: bool,
 ) -> Result<IDWriteTextFormat, String> {
     let fmt = factory
-        .CreateTextFormat(w!("Segoe UI Variable Text"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("en-us"))
-        .or_else(|_| factory.CreateTextFormat(w!("Segoe UI"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("en-us")))
+        .CreateTextFormat(
+            w!("Segoe UI Variable Text"),
+            None,
+            weight,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            size,
+            w!("en-us"),
+        )
+        .or_else(|_| {
+            factory.CreateTextFormat(
+                w!("Segoe UI"),
+                None,
+                weight,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                size,
+                w!("en-us"),
+            )
+        })
         .map_err(|e| format!("TextFormat failed: {e}"))?;
     let _ = fmt.SetTextAlignment(align);
     let _ = fmt.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -102,14 +120,62 @@ pub fn create_text_formats(factory: &IDWriteFactory) -> Result<TextFormats, Stri
     // SAFETY: Valid DirectWrite factory creating immutable text format handles.
     unsafe {
         Ok(TextFormats {
-            display: make_fmt(factory, DWRITE_FONT_WEIGHT_SEMI_BOLD, 20.0, DWRITE_TEXT_ALIGNMENT_LEADING, true)?,
-            title: make_fmt(factory, DWRITE_FONT_WEIGHT_SEMI_BOLD, 13.0, DWRITE_TEXT_ALIGNMENT_LEADING, true)?,
-            artist: make_fmt(factory, DWRITE_FONT_WEIGHT_NORMAL, 12.0, DWRITE_TEXT_ALIGNMENT_LEADING, true)?,
-            body: make_fmt(factory, DWRITE_FONT_WEIGHT_NORMAL, 13.0, DWRITE_TEXT_ALIGNMENT_LEADING, false)?,
-            caption: make_fmt(factory, DWRITE_FONT_WEIGHT_NORMAL, 11.5, DWRITE_TEXT_ALIGNMENT_LEADING, true)?,
-            caption_center: make_fmt(factory, DWRITE_FONT_WEIGHT_MEDIUM, 11.5, DWRITE_TEXT_ALIGNMENT_CENTER, true)?,
-            badge: make_fmt(factory, DWRITE_FONT_WEIGHT_BOLD, 11.0, DWRITE_TEXT_ALIGNMENT_CENTER, true)?,
-            clock: make_fmt(factory, DWRITE_FONT_WEIGHT_MEDIUM, 13.0, DWRITE_TEXT_ALIGNMENT_TRAILING, true)?,
+            display: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                20.0,
+                DWRITE_TEXT_ALIGNMENT_LEADING,
+                true,
+            )?,
+            title: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                13.0,
+                DWRITE_TEXT_ALIGNMENT_LEADING,
+                true,
+            )?,
+            artist: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                12.0,
+                DWRITE_TEXT_ALIGNMENT_LEADING,
+                true,
+            )?,
+            body: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                13.0,
+                DWRITE_TEXT_ALIGNMENT_LEADING,
+                false,
+            )?,
+            caption: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                11.5,
+                DWRITE_TEXT_ALIGNMENT_LEADING,
+                true,
+            )?,
+            caption_center: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_MEDIUM,
+                11.5,
+                DWRITE_TEXT_ALIGNMENT_CENTER,
+                true,
+            )?,
+            badge: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_BOLD,
+                11.0,
+                DWRITE_TEXT_ALIGNMENT_CENTER,
+                true,
+            )?,
+            clock: make_fmt(
+                factory,
+                DWRITE_FONT_WEIGHT_MEDIUM,
+                13.0,
+                DWRITE_TEXT_ALIGNMENT_TRAILING,
+                true,
+            )?,
         })
     }
 }
@@ -144,7 +210,9 @@ pub fn get_date_and_time_parts() -> (String, String) {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     let day_name = days.get(st.wDayOfWeek as usize).unwrap_or(&"Mon");
-    let month_name = months.get(st.wMonth.saturating_sub(1) as usize).unwrap_or(&"Nov");
+    let month_name = months
+        .get(st.wMonth.saturating_sub(1) as usize)
+        .unwrap_or(&"Nov");
     let (hour_12, am_pm) = match st.wHour {
         0 => (12, "AM"),
         1..=11 => (st.wHour, "AM"),

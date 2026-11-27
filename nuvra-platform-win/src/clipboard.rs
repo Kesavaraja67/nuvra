@@ -5,13 +5,15 @@
 use std::path::PathBuf;
 use std::ptr;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{BOOL, HANDLE, HGLOBAL, HWND, POINT};
+use windows::Win32::Foundation::{GlobalFree, BOOL, HANDLE, HGLOBAL, HWND, POINT};
 use windows::Win32::System::Com::{CoInitializeEx, IDataObject, COINIT_MULTITHREADED};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber, OpenClipboard,
     SetClipboardData,
 };
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows::Win32::System::Memory::{
+    GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
+};
 use windows::Win32::System::Ole::{
     IDropSource, OleInitialize, DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE,
 };
@@ -45,46 +47,114 @@ pub fn get_clipboard_sequence() -> u32 {
     unsafe { GetClipboardSequenceNumber() }
 }
 
-/// Read UTF-16 Unicode text from the Windows clipboard if available.
-pub fn read_clipboard_text() -> Option<String> {
-    // SAFETY: OpenClipboard -> GetClipboardData -> GlobalLock/Unlock -> CloseClipboard.
-    unsafe {
-        if OpenClipboard(HWND(ptr::null_mut())).is_err() {
-            return None;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClipboardReadResult {
+    Text(String),
+    NonText,
+    OpenFailed,
+}
+
+struct ClipboardOpenGuard;
+
+impl Drop for ClipboardOpenGuard {
+    fn drop(&mut self) {
+        // SAFETY: Always balances a successful OpenClipboard call.
+        unsafe {
+            let _ = CloseClipboard();
         }
-        let result = (|| {
-            let handle = GetClipboardData(CF_UNICODEXT_FMT).ok()?;
-            let hglobal = HGLOBAL(handle.0);
-            let ptr_void = GlobalLock(hglobal);
-            if ptr_void.is_null() {
-                return None;
-            }
-            let wide_ptr = ptr_void as *const u16;
-            let mut len = 0usize;
-            while *wide_ptr.add(len) != 0 && len < 65_536 {
-                len += 1;
-            }
-            let slice = std::slice::from_raw_parts(wide_ptr, len);
-            let text = String::from_utf16_lossy(slice);
-            let _ = GlobalUnlock(hglobal);
-            Some(text)
-        })();
-        let _ = CloseClipboard();
-        result
     }
 }
 
-/// Write UTF-16 Unicode text onto the Windows clipboard.
-pub fn write_clipboard_text(text: &str) -> bool {
+struct HGlobalGuard(Option<HGLOBAL>);
+
+impl HGlobalGuard {
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for HGlobalGuard {
+    fn drop(&mut self) {
+        if let Some(hmem) = self.0.take() {
+            // SAFETY: Frees uncommitted global memory not yet owned by Windows clipboard.
+            unsafe {
+                let _ = GlobalFree(hmem);
+            }
+        }
+    }
+}
+
+/// Read at most `byte_size` bytes of UTF-16LE from `wide_ptr`, stopping cleanly at NUL or bound.
+///
+/// # Safety
+/// `wide_ptr` must be valid for reads up to `byte_size` bytes when non-null.
+pub(crate) unsafe fn extract_utf16_bounded(wide_ptr: *const u16, byte_size: usize) -> String {
+    let max_units = (byte_size / std::mem::size_of::<u16>()).min(65_536);
+    if wide_ptr.is_null() || max_units == 0 {
+        return String::new();
+    }
+    let mut len = 0usize;
+    while len < max_units && *wide_ptr.add(len) != 0 {
+        len += 1;
+    }
+    if len == 0 {
+        return String::new();
+    }
+    let slice = std::slice::from_raw_parts(wide_ptr, len);
+    String::from_utf16_lossy(slice)
+}
+
+/// Read UTF-16 Unicode text from the Windows clipboard, distinguishing transient open failure from non-text data.
+pub fn try_read_clipboard_text() -> ClipboardReadResult {
+    // SAFETY: OpenClipboard -> GlobalSize-bounded GlobalLock/Unlock -> CloseClipboard via guard.
+    unsafe {
+        if OpenClipboard(HWND(ptr::null_mut())).is_err() {
+            return ClipboardReadResult::OpenFailed;
+        }
+        let _clip_guard = ClipboardOpenGuard;
+
+        let Ok(handle) = GetClipboardData(CF_UNICODEXT_FMT) else {
+            return ClipboardReadResult::NonText;
+        };
+        let hglobal = HGLOBAL(handle.0);
+        let byte_size = GlobalSize(hglobal);
+        if byte_size < std::mem::size_of::<u16>() {
+            return ClipboardReadResult::NonText;
+        }
+        let ptr_void = GlobalLock(hglobal);
+        if ptr_void.is_null() {
+            return ClipboardReadResult::NonText;
+        }
+        let text = extract_utf16_bounded(ptr_void as *const u16, byte_size);
+        let _ = GlobalUnlock(hglobal);
+        ClipboardReadResult::Text(text)
+    }
+}
+
+/// Read UTF-16 Unicode text from the Windows clipboard if available.
+pub fn read_clipboard_text() -> Option<String> {
+    match try_read_clipboard_text() {
+        ClipboardReadResult::Text(s) => Some(s),
+        ClipboardReadResult::NonText | ClipboardReadResult::OpenFailed => None,
+    }
+}
+
+/// Write UTF-16 Unicode text onto the Windows clipboard owned by `owner`.
+pub fn write_clipboard_text(owner: HWND, text: &str) -> bool {
+    if owner.0.is_null() {
+        return false;
+    }
     let mut wide: Vec<u16> = text.encode_utf16().collect();
     wide.push(0);
     let byte_len = wide.len() * std::mem::size_of::<u16>();
 
-    // SAFETY: Allocates movable global buffer, copies null-terminated UTF-16 string, transfers ownership to clipboard.
+    // SAFETY: Allocates movable HGLOBAL, checks lock/open/EmptyClipboard, and frees allocation on any failure.
     unsafe {
         let Ok(hmem) = GlobalAlloc(GMEM_MOVEABLE, byte_len) else {
             return false;
         };
+        let mut mem_guard = HGlobalGuard(Some(hmem));
+
         let ptr_void = GlobalLock(hmem);
         if ptr_void.is_null() {
             return false;
@@ -92,19 +162,26 @@ pub fn write_clipboard_text(text: &str) -> bool {
         ptr::copy_nonoverlapping(wide.as_ptr(), ptr_void as *mut u16, wide.len());
         let _ = GlobalUnlock(hmem);
 
-        if OpenClipboard(HWND(ptr::null_mut())).is_err() {
+        if OpenClipboard(owner).is_err() {
             return false;
         }
-        let _ = EmptyClipboard();
-        let set_ok = SetClipboardData(CF_UNICODEXT_FMT, HANDLE(hmem.0)).is_ok();
-        let _ = CloseClipboard();
-        set_ok
+        let _clip_guard = ClipboardOpenGuard;
+
+        if EmptyClipboard().is_err() {
+            return false;
+        }
+        if SetClipboardData(CF_UNICODEXT_FMT, HANDLE(hmem.0)).is_ok() {
+            mem_guard.disarm();
+            true
+        } else {
+            false
+        }
     }
 }
 
 /// Copy one or more staged file paths to the Windows clipboard as CF_HDROP (pastable in Explorer/apps).
-pub fn write_clipboard_files(paths: &[PathBuf]) -> bool {
-    if paths.is_empty() {
+pub fn write_clipboard_files(owner: HWND, paths: &[PathBuf]) -> bool {
+    if owner.0.is_null() || paths.is_empty() {
         return false;
     }
     let mut wide_list: Vec<u16> = Vec::new();
@@ -118,11 +195,13 @@ pub fn write_clipboard_files(paths: &[PathBuf]) -> bool {
     let hdr_size = std::mem::size_of::<DROPFILES>();
     let total_bytes = hdr_size + wide_list.len() * std::mem::size_of::<u16>();
 
-    // SAFETY: Allocates movable HGLOBAL containing DROPFILES header + double-null UTF-16 paths and passes to SetClipboardData.
+    // SAFETY: Allocates movable HGLOBAL containing DROPFILES, verifies EmptyClipboard, and frees allocation on failure.
     unsafe {
         let Ok(hmem) = GlobalAlloc(GMEM_MOVEABLE, total_bytes) else {
             return false;
         };
+        let mut mem_guard = HGlobalGuard(Some(hmem));
+
         let ptr_void = GlobalLock(hmem);
         if ptr_void.is_null() {
             return false;
@@ -138,13 +217,20 @@ pub fn write_clipboard_files(paths: &[PathBuf]) -> bool {
         ptr::copy_nonoverlapping(wide_list.as_ptr(), dst, wide_list.len());
         let _ = GlobalUnlock(hmem);
 
-        if OpenClipboard(HWND(ptr::null_mut())).is_err() {
+        if OpenClipboard(owner).is_err() {
             return false;
         }
-        let _ = EmptyClipboard();
-        let ok = SetClipboardData(CF_HDROP_FMT, HANDLE(hmem.0)).is_ok();
-        let _ = CloseClipboard();
-        ok
+        let _clip_guard = ClipboardOpenGuard;
+
+        if EmptyClipboard().is_err() {
+            return false;
+        }
+        if SetClipboardData(CF_HDROP_FMT, HANDLE(hmem.0)).is_ok() {
+            mem_guard.disarm();
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -183,5 +269,31 @@ pub fn start_file_drag_drop(hwnd: HWND, path: &std::path::Path) -> bool {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_utf16_bounded_handles_missing_terminator() {
+        let units = [b'H' as u16, b'i' as u16, b'!' as u16];
+        // Odd byte size or missing NUL terminator never reads out of bounds
+        let text = unsafe { extract_utf16_bounded(units.as_ptr(), 7) };
+        assert_eq!(text, "Hi!");
+
+        let empty = unsafe { extract_utf16_bounded(ptr::null(), 1) };
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_clipboard_writers_reject_null_owner_hwnd() {
+        let null_hwnd = HWND(ptr::null_mut());
+        assert!(!write_clipboard_text(null_hwnd, "hello"));
+        assert!(!write_clipboard_files(
+            null_hwnd,
+            &[PathBuf::from("Cargo.toml")]
+        ));
     }
 }

@@ -19,8 +19,9 @@ use windows::Win32::Graphics::Direct2D::Common::{
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1CreateFactory, ID2D1Factory, ID2D1RenderTarget, ID2D1SolidColorBrush,
-    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
+    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_FACTORY_TYPE_SINGLE_THREADED,
+    D2D1_FEATURE_LEVEL_DEFAULT, D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT,
+    D2D1_RENDER_TARGET_USAGE_NONE,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat, DWRITE_FACTORY_TYPE_SHARED,
@@ -137,8 +138,16 @@ pub struct ModularRenderer {
 }
 
 fn make_brushes(rt: &ID2D1RenderTarget) -> Result<DrawBrushes, String> {
-    let c = D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-    let b = || unsafe { rt.CreateSolidColorBrush(&c, None).map_err(|e| e.to_string()) };
+    let c = D2D1_COLOR_F {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    let b = || unsafe {
+        rt.CreateSolidColorBrush(&c, None)
+            .map_err(|e| e.to_string())
+    };
     Ok(DrawBrushes {
         surface: b()?,
         surface_raised: b()?,
@@ -165,22 +174,39 @@ impl ModularRenderer {
     pub fn new(swapchain: &IDXGISwapChain) -> Result<Self, String> {
         // SAFETY: D2D1CreateFactory, DWriteCreateFactory, and Direct2D DXGI render target initialization.
         unsafe {
-            let surface: IDXGISurface = swapchain.GetBuffer(0).map_err(|e| format!("DXGI surface: {e}"))?;
+            let surface: IDXGISurface = swapchain
+                .GetBuffer(0)
+                .map_err(|e| format!("DXGI surface: {e}"))?;
             let factory: ID2D1Factory = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)
                 .map_err(|e| format!("D2D1CreateFactory: {e}"))?;
             let props = D2D1_RENDER_TARGET_PROPERTIES {
                 r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
-                pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                },
                 dpiX: 96.0,
                 dpiY: 96.0,
                 usage: D2D1_RENDER_TARGET_USAGE_NONE,
                 minLevel: D2D1_FEATURE_LEVEL_DEFAULT,
             };
-            let render_target = factory.CreateDxgiSurfaceRenderTarget(&surface, &props).map_err(|e| format!("D2D target: {e}"))?;
-            let dwrite_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).map_err(|e| format!("DWrite: {e}"))?;
+            let render_target = factory
+                .CreateDxgiSurfaceRenderTarget(&surface, &props)
+                .map_err(|e| format!("D2D target: {e}"))?;
+            let dwrite_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)
+                .map_err(|e| format!("DWrite: {e}"))?;
             let brushes = make_brushes(&render_target)?;
             let formats = text::create_text_formats(&dwrite_factory)?;
-            Ok(Self { _factory: factory, _dwrite_factory: dwrite_factory, render_target, brushes, formats, active_drawer: None, is_move_mode: false, snap_flashed: false })
+            Ok(Self {
+                _factory: factory,
+                _dwrite_factory: dwrite_factory,
+                render_target,
+                brushes,
+                formats,
+                active_drawer: None,
+                is_move_mode: false,
+                snap_flashed: false,
+            })
         }
     }
 
@@ -200,46 +226,108 @@ impl ModularRenderer {
         unsafe {
             text::update_brushes(&self.brushes, colors);
             self.render_target.BeginDraw();
-            self.render_target.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            self.render_target.Clear(Some(&D2D1_COLOR_F {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }));
 
-            glass::draw_glass_shell(&self.render_target, layout, vm.glass_style, vm.is_dark_theme, &self.brushes.surface, &self.brushes.edge);
+            glass::draw_glass_shell(
+                &self.render_target,
+                layout,
+                vm.glass_style,
+                vm.is_dark_theme,
+                &self.brushes.surface,
+                &self.brushes.edge,
+            );
 
-            let clip_rect = D2D_RECT_F { left: layout.body.left, top: layout.body.top, right: layout.body.right, bottom: layout.body.bottom };
-            self.render_target.PushAxisAlignedClip(&clip_rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            let clip_rect = D2D_RECT_F {
+                left: layout.body.left,
+                top: layout.body.top,
+                right: layout.body.right,
+                bottom: layout.body.bottom,
+            };
+            self.render_target
+                .PushAxisAlignedClip(&clip_rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 
             match layout.state {
                 LayoutState::Collapsed => {
-                    collapsed::draw_collapsed(&self.render_target, &self.brushes, &self.formats, layout, vm, self.is_move_mode);
+                    collapsed::draw_collapsed(
+                        &self.render_target,
+                        &self.brushes,
+                        &self.formats,
+                        layout,
+                        vm,
+                        self.is_move_mode,
+                    );
                 }
                 LayoutState::Expanded => {
                     toolbar::draw_toolbar(
-                        &self.render_target, &self.brushes, &self.formats, layout,
-                        vm, self.active_drawer,
+                        &self.render_target,
+                        &self.brushes,
+                        &self.formats,
+                        layout,
+                        vm,
+                        self.active_drawer,
                     );
                     if layout.body.height() >= 96.0 * layout.scale {
-                        drawers::draw_drawer(&self.render_target, &self.brushes, &self.formats, layout, self.active_drawer, vm);
+                        drawers::draw_drawer(
+                            &self.render_target,
+                            &self.brushes,
+                            &self.formats,
+                            layout,
+                            self.active_drawer,
+                            vm,
+                        );
                     }
                 }
                 LayoutState::Banner => {
-                    banner::draw_banner(&self.render_target, &self.brushes, &self.formats, layout, vm);
+                    banner::draw_banner(
+                        &self.render_target,
+                        &self.brushes,
+                        &self.formats,
+                        layout,
+                        vm,
+                    );
                 }
             }
 
             self.render_target.PopAxisAlignedClip();
             if self.is_move_mode || self.snap_flashed {
-                overlay::draw_move_rim(&self.render_target, &self.brushes, layout, self.snap_flashed);
+                overlay::draw_move_rim(
+                    &self.render_target,
+                    &self.brushes,
+                    layout,
+                    self.snap_flashed,
+                );
             }
 
-            self.render_target.EndDraw(None, None).map_err(|e| format!("D2D EndDraw failed: {e}"))?;
-            swapchain.Present(0, DXGI_PRESENT(0)).ok().map_err(|e| format!("DXGI Present failed: {e}"))?;
+            self.render_target
+                .EndDraw(None, None)
+                .map_err(|e| format!("D2D EndDraw failed: {e}"))?;
+            swapchain
+                .Present(0, DXGI_PRESENT(0))
+                .ok()
+                .map_err(|e| format!("DXGI Present failed: {e}"))?;
         }
         Ok(())
     }
 
     /// Hit-test click coordinates against toolbar items, workspace cards, bottom collapse handle, and drawers
-    pub fn handle_click(&self, layout: &Layout, x: f32, y: f32, vm: &RenderViewModel<'_>) -> Option<RendererAction> {
+    pub fn handle_click(
+        &self,
+        layout: &Layout,
+        x: f32,
+        y: f32,
+        vm: &RenderViewModel<'_>,
+    ) -> Option<RendererAction> {
         for item in &layout.items {
-            if x >= item.hit_rect.left && x <= item.hit_rect.right && y >= item.hit_rect.top && y <= item.hit_rect.bottom {
+            if x >= item.hit_rect.left
+                && x <= item.hit_rect.right
+                && y >= item.hit_rect.top
+                && y <= item.hit_rect.bottom
+            {
                 let hit = match item.id {
                     ItemId::AlbumArt | ItemId::TrackText => Some(RendererAction::ToggleDrawer(0)),
                     ItemId::Prev => Some(RendererAction::MediaPrev),
@@ -252,7 +340,9 @@ impl ModularRenderer {
                     ItemId::Bell => Some(RendererAction::ToggleDrawer(4)),
                     ItemId::Settings => Some(RendererAction::ToggleDrawer(5)),
                     ItemId::BannerClose => Some(RendererAction::DismissBanner),
-                    ItemId::BannerAppIcon | ItemId::BannerText => Some(RendererAction::OpenBannerNotif),
+                    ItemId::BannerAppIcon | ItemId::BannerText => {
+                        Some(RendererAction::OpenBannerNotif)
+                    }
                     _ => None,
                 };
                 if hit.is_some() {
@@ -266,7 +356,12 @@ impl ModularRenderer {
         }
         let s = layout.scale;
         if let Some(d_idx) = self.active_drawer {
-            let bx = drawer_views::DrawerBox { l: 16.0 * s, t: 54.0 * s, r: layout.body.right - 16.0 * s, s };
+            let bx = drawer_views::DrawerBox {
+                l: 16.0 * s,
+                t: 54.0 * s,
+                r: layout.body.right - 16.0 * s,
+                s,
+            };
             return drawer_views::hit_test_drawer(d_idx, bx, x, y, vm);
         }
 
